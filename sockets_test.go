@@ -3,12 +3,13 @@ package sockets
 import (
 	"github.com/gorilla/websocket"
 	"github.com/codegangsta/martini"
+	"net/http/httptest"
 	"net/http"
 	"testing"
 	"time"
 	"sync"
-	"log"
-	"github.com/rakyll/coop"
+	"strings"
+	"io"
 )
 
 const (
@@ -26,20 +27,21 @@ type Message struct {
 	Text string `json:"text"`
 }
 
-var once sync.Once
-var recvMessages []*Message
-var recvCount int
-var recvDone bool
-var sendMessages []*Message
-var sendCount int
-var pingCount int
-var pingMessages []*Message
-
-var recvStrings []string
-var recvStringsCount int
-var recvStringsDone bool
-var sendStrings []string
-var sendStringsCount int
+var (
+	once sync.Once
+	recvMessages []*Message
+	recvCount int
+	recvDone bool
+	sendMessages []*Message
+	sendCount int
+	sendDone bool
+	recvStrings []string
+	recvStringsCount int
+	recvStringsDone bool
+	sendStrings []string
+	sendStringsCount int
+	sendStringsDone bool
+)
 
 // Test Helpers
 func expectStringsToBeEmpty(t *testing.T, strings []string) {
@@ -64,7 +66,6 @@ func expectStringsToHaveArrived(t *testing.T, count int, strings []string) {
 			}
 		}
 	}
-
 }
 
 func expectMessagesToHaveArrived(t *testing.T, count int, messages []*Message) {
@@ -91,18 +92,28 @@ func expectPingsToHaveBeenExecuted(t *testing.T, count int, messages []*Message)
 	}
 }
 
+func expectStatusCode(t *testing.T, expectedStatusCode int, actualStatusCode int) {
+	if actualStatusCode != expectedStatusCode {
+		t.Errorf("Expected StatusCode %d, but received %d", expectedStatusCode, actualStatusCode)
+	}
+}
+
+func expectIsDone(t *testing.T, done bool) {
+	if !done {
+		t.Errorf("Expected to be done, but was not")
+	}
+}
+
 func startServer() {
-	log.Println("starting Server for tests")
-	
 	m := martini.Classic()
 	
-	m.Get(recvPath, Bind(Message{}), func(context martini.Context, receiver <-chan *Message, done chan bool) int {
+	m.Get(recvPath, JSON(Message{}), func(context martini.Context, receiver <-chan *Message, done <-chan bool) int {
 		for {
 			select {
 			case msg := <- receiver:
 				recvMessages = append(recvMessages, msg)
 			case <-done:
-				log.Println("done sig received on " + recvPath)
+				recvDone = true
 				return http.StatusOK
 			}
 		}
@@ -110,14 +121,20 @@ func startServer() {
 		return http.StatusOK
 	})
 	
-	m.Get(sendPath, Bind(Message{}), func(context martini.Context, sender chan<- *Message, done chan bool) int {
-		ticker := time.NewTicker(3*time.Millisecond)
+	m.Get(sendPath, JSON(Message{}), func(context martini.Context, sender chan<- *Message, done <-chan bool, disconnect chan<- int) int {
+		ticker := time.NewTicker(1*time.Millisecond)
+		bomb   := time.After(4*time.Millisecond)
 		
 		for {
 			select {
 			case <-ticker.C:
 				sender<- &Message{"Hello World"}
 			case <-done:
+				ticker.Stop()
+				sendDone = true
+				return http.StatusOK
+			case <-bomb:
+				disconnect<-websocket.CloseGoingAway
 				return http.StatusOK
 			}
 		}
@@ -125,54 +142,68 @@ func startServer() {
 		return http.StatusOK
 	})
 	
-	m.Get(recvStringsPath, Messages(), func(context martini.Context, receiver <-chan string, done chan bool) int {
+	m.Get(recvStringsPath, Messages(), func(context martini.Context, receiver <-chan string, done <-chan bool) int {
 		for {
 			select {
 			case msg := <- receiver:
 				recvStrings = append(recvStrings, msg)
 			case <-done:
+				recvStringsDone = true
 				return http.StatusOK
 			}
 		}
 		
 		return http.StatusOK
-		
 	})
 	
-	m.Get(sendStringsPath, Messages(), func(context martini.Context, sender chan<- string, done chan bool) int {
+	m.Get(sendStringsPath, Messages(), func(context martini.Context, sender chan<- string, done <-chan bool, disconnect chan<- int) int {
+		ticker := time.NewTicker(1*time.Millisecond)
+		bomb   := time.After(4*time.Millisecond)
+		
 		for {
 			select {
-			case <-time.After(3*time.Millisecond):
+			case <-ticker.C:
 				sender<- "Hello World"
 			case <-done:
+				ticker.Stop()
+				sendStringsDone = true
+				return http.StatusOK
+			case <-bomb:
+				disconnect<-websocket.CloseGoingAway
+				
 				return http.StatusOK
 			}
 		}
 		
 		return http.StatusOK
 	})
-	
+
 	go m.Run()
+	time.Sleep(5*time.Millisecond)
 }
 
-func connectSocket(t *testing.T, path string) *websocket.Conn {
+func connectSocket(t *testing.T, path string) (*websocket.Conn, *http.Response) {
 	header := make(http.Header)
 	header.Add("Origin", host)
-	ws, _, err := websocket.DefaultDialer.Dial(endpoint + path, header)
+	ws, resp, err := websocket.DefaultDialer.Dial(endpoint + path, header)
 	if err != nil {
 		t.Fatalf("Connecting the socket failed: %s", err.Error())
 	}
-	return ws
+	
+	return ws, resp
 }
 
 func TestStringReceive(t *testing.T) {
 	once.Do(startServer)
 	expectStringsToBeEmpty(t, recvStrings)
 	
-	ws := connectSocket(t, recvStringsPath)
-	defer ws.Close()
+	ws, resp := connectSocket(t, recvStringsPath)
 
-	ch := coop.Until(time.Now().Add(4*time.Millisecond), time.Millisecond, func() {
+
+	ticker := time.NewTicker(time.Millisecond)
+	
+	for {
+		<- ticker.C
 		s := "Hello World"
 		err := ws.WriteMessage(websocket.TextMessage, []byte(s))
 		if err != nil {
@@ -180,82 +211,116 @@ func TestStringReceive(t *testing.T) {
 		}
 		recvStringsCount++
 		if recvStringsCount == 4 {
+			ws.Close()
 			return
 		}
-	})
-	<-ch
-	
+	}
+		
 	expectStringsToHaveArrived(t, 3, recvStrings)
+	expectStatusCode(t, http.StatusSwitchingProtocols, resp.StatusCode)
+	expectIsDone(t, recvStringsDone)
 }
 
 func TestStringSend(t *testing.T) {
 	once.Do(startServer)
 	expectStringsToBeEmpty(t, sendStrings)
 	
-	ws := connectSocket(t, sendStringsPath)
+	ws, resp := connectSocket(t, sendStringsPath)
 	defer ws.Close()
 
 	for {
 		_, msgArray, err := ws.ReadMessage()
 		msg := string(msgArray)
 		sendStrings = append(sendStrings, msg)
-		if err != nil {
+		if err != nil && err != io.EOF {
 			t.Errorf("Receiving from the socket failed with %v", err)
 		}
 		if sendStringsCount == 3 {
-			expectStringsToHaveArrived(t, 3, sendStrings)
 			return
 		}
 		sendStringsCount++
 	}
-	
+	expectStringsToHaveArrived(t, 3, sendStrings)
+	expectStatusCode(t, http.StatusSwitchingProtocols, resp.StatusCode)
+	expectIsDone(t, sendStringsDone)
 }
 
-func TestBindReceive(t *testing.T) {
+func TestJSONReceive(t *testing.T) {
 	once.Do(startServer)
 	expectMessagesToBeEmpty(t, recvMessages)
 	
-	ws := connectSocket(t, recvPath)
+	ws, resp := connectSocket(t, recvPath)
 	
 	message := &Message{"Hello World"}
-		
-	ch := coop.Until(time.Now().Add(4*time.Millisecond), time.Millisecond, func() {
+	
+	ticker := time.NewTicker(time.Millisecond)
+	
+	for {
+		<- ticker.C
 		err := ws.WriteJSON(message)
 		if err != nil {
 			t.Errorf("Writing to the socket failed with %v", err)
 		}
 		recvCount++
 		if recvCount == 4 {
+			ws.Close()
 			return
 		}
-	})
-	<-ch
-	
-	ws.Close()
+	}
 	
 	expectMessagesToHaveArrived(t, 3, recvMessages)
+	expectStatusCode(t, http.StatusSwitchingProtocols, resp.StatusCode)
+	expectIsDone(t, recvDone)
 }
 
-func TestBindSend(t *testing.T) {
+func TestJSONSend(t *testing.T) {
 	once.Do(startServer)
 	expectMessagesToBeEmpty(t, sendMessages)
 	
-	ws := connectSocket(t, sendPath)
+	ws, resp := connectSocket(t, sendPath)
 	defer ws.Close()
 	
 	for {
 		msg := &Message{}
 		err := ws.ReadJSON(msg)
 		sendMessages = append(sendMessages, msg)
-		if err != nil {
+		if err != nil && err != io.EOF {
 			t.Errorf("Receiving from the socket failed with %v", err)
 		}
 		if sendCount == 3 {
-			expectMessagesToHaveArrived(t, 3, sendMessages)
 			return
 		}
 		sendCount++
 	}
+	expectMessagesToHaveArrived(t, 3, sendMessages)
+	expectStatusCode(t, http.StatusSwitchingProtocols, resp.StatusCode)
+	expectIsDone(t, sendDone)
+}
+
+func TestCrossOrigin(t *testing.T) {
+	header := make(http.Header)
+	header.Add("Origin", "http://somewhere.com")
+	_, resp, err := websocket.DefaultDialer.Dial(endpoint + sendPath, header)
+	if err == nil {
+		t.Fatalf("Connecting to the socket succeeded with a cross origin request")
+	}
+	expectStatusCode(t, http.StatusForbidden, resp.StatusCode)
+}
+
+func TestUnallowedMethods(t *testing.T) {
+	m := martini.Classic()
 	
+	recorder := httptest.NewRecorder()
+	req, err := http.NewRequest("POST", "/test", strings.NewReader(""))
+
+	if err != nil {
+		t.Error(err)
+	}
 	
+	m.Any("/test", Messages(), func() int {
+		return http.StatusOK
+	})
+	
+	m.ServeHTTP(recorder, req)
+	expectStatusCode(t, http.StatusMethodNotAllowed, recorder.Code)
 }

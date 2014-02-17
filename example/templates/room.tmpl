@@ -1,0 +1,20 @@
+<h1>Welcome to chatroom {{.room.name}}</h1>
+<form id="name-form" method="POST" action="#">
+  <fieldset>
+    <input type="text" id="name-input" name="name" placeholder="Please enter your name"/>
+  </fieldset>
+  <fieldset>
+    <input type="submit" value="Enter Room {{.room.name}}">
+  </fieldset>
+</form>
+<div id="room">
+  
+</div>
+<div id="form" class="hidden">
+  <form id="send-form" method="POST" action="#">
+    <fieldset>
+      <input type="text" id="text-input" name="name" placeholder="Your message goes here"/>
+      <input type="submit" value="Send">
+    </fieldset>
+  </form>
+</div>

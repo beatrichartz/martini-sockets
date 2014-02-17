@@ -1,0 +1,125 @@
+/* Eric Meyer's Reset CSS v2.0 - http://cssreset.com */
+html,body,div,span,applet,object,iframe,h1,h2,h3,h4,h5,h6,p,blockquote,pre,a,abbr,acronym,address,big,cite,code,del,dfn,em,img,ins,kbd,q,s,samp,small,strike,strong,sub,sup,tt,var,b,u,i,center,dl,dt,dd,ol,ul,li,fieldset,form,label,legend,table,caption,tbody,tfoot,thead,tr,th,td,article,aside,canvas,details,embed,figure,figcaption,footer,header,hgroup,menu,nav,output,ruby,section,summary,time,mark,audio,video{border:0;font-size:100%;font:inherit;vertical-align:baseline;margin:0;padding:0}article,aside,details,figcaption,figure,footer,header,hgroup,menu,nav,section{display:block}body{line-height:1}ol,ul{list-style:none}blockquote,q{quotes:none}blockquote:before,blockquote:after,q:before,q:after{content:none}table{border-collapse:collapse;border-spacing:0}
+
+body {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 36px;
+  line-height: 1.45em;
+  font-weight: 100;
+  text-rendering: optimizelegibility;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: 0.025em;
+  text-align: center;
+}
+
+form input, form select, form button {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.45em;
+  font-weight: 100;
+  text-rendering: optimizelegibility;
+  -webkit-font-smoothing: antialiased;
+  text-align: center;
+  border: none;
+  background: #EEE;
+  padding: 1em;
+  width: 40%;
+  text-align: left;
+}
+
+form input:focus, form input:active {
+  outline: none;
+}
+
+form input[type="submit"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  -o-appearance: none;
+  
+  border: none;
+  background: #222;
+  color: white;
+  -webkit-transition: background 0.5s ease-out;
+  -moz-transition: background 0.5s ease-out;
+  -o-transition: background 0.5s ease-out;
+  -ms-transition: background 0.5s ease-out;
+  transition: background 0.5s ease-out;
+  
+  min-width: 6%;
+  width: auto;
+  text-align: center;
+  line-height: 1.45em;
+}
+
+form input[type="submit"]:hover {
+  background: #FF0000;
+}
+
+#form, #room p {
+  -webkit-transition: opacity 0.5s ease-out;
+  -moz-transition: opacity 0.5s ease-out;
+  -o-transition: opacity 0.5s ease-out;
+  -ms-transition: opacity 0.5s ease-out;
+  transition: opacity 0.5s ease-out;
+}
+
+#form.hidden {
+  opacity: 0;
+}
+
+#room, form legend {
+  font-size: 0.5em;
+  line-height: 1.45em;
+}
+
+#room {
+  display: inline-block;
+  width: 50%;
+  margin: 6em auto;
+}
+
+#room p.right {
+  text-align: right;
+}
+
+#room p.left {
+  text-align: left;
+}
+
+#room p span {
+  display: block;
+}
+
+#room p {
+  opacity: 0;
+}
+
+#room p.show {
+  opacity: 1;
+}
+
+#room p span:first-child {
+  font-weight: 500;
+  margin-top: 0.5em;
+}
+
+h1, #form {
+  position: fixed;
+  background: #DD0034;
+  color: white;
+  width: 100%;
+  left: 0;
+  padding: 0.5em 0;
+}
+
+h1 {
+  top: 0;
+}
+
+#form {
+  bottom: 0;
+}
+
+#name-form {
+  margin-top: 3em;
+}

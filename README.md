@@ -1,18 +1,16 @@
 # sockets
 
-Sockets channel binding for martini.
+Sockets to channels binding for martini. This is currently (2/17/2014) still WIP.
 
-[API Reference](http://godoc.org/github.com/codegangsta/martini-contrib/sockets)
-
-
+[API Reference](http://godoc.org/github.com/beatrichartz/sockets)
 
 ## Description
 
-Package `sockets` makes it fun to use websockets with Martini.
+Package `sockets` makes it fun to use websockets with Martini. Its aim is to provide an easy to use interface for socket handling which makes it possible to implement socket messaging with just one `select` statement listening to different channels.
 
-#### Bind
+#### JSON
 
-`sockets.Bind` is a simple middleware that organizes websockets messages into any struct type you may wish for.
+`sockets.JSON` is a simple middleware that organizes websockets messages into any struct type you may wish for.
 
 #### Messages
 
@@ -20,69 +18,7 @@ Package `sockets` makes it fun to use websockets with Martini.
 
 ## Usage
 
-Let's build a simple chat for martini using the `sockets` package:
-
-```go
-package main
-
-import (
-   "net/http"
-   
-   "github.com/codegangsta/martini"
-   "github.com/codegangsta/martini-contrib/sockets"
-)
-
-type Chat struct {
-	rooms []*Room
-}
-
-type Room struct {
-	name string
-	clients []*Client
-}
-
-type Client struct {
-	in <-chan *Message
-	out chan<- *Message
-}
-
-type Message struct {
-	Title   string    `json:"title"`
-	Content string    `json:"content"`
-}
-
-func main() {
-	m := martini.Classic()
-	
-	rooms := make([]*Room, 0)
-	chat := Chat{rooms}
-	
-	m.Get("/room/:name", sockets.Bind(Message{}), func(params martini.Params, receiver <-chan *Message, sender chan<- *Message) {
-		var r Room
-		for _, room := range rooms {
-			if room.name == params["name"] {
-				r = room
-				break
-			}
-		}
-		if r == nil {
-			r = Room{params["name"], make([]*Client)}
-			rooms = append(rooms, &r)
-		}
-		client = Client{receiver, sender}
-		for {
-			msg := <-client.in
-			for _, c := range r.clients {
-				if c != client {
-					c.out <- msg
-				}
-			}
-		}
-	})
-
-	m.Run()
-}
-```
+Have a look into the example directory to get a feeling for how to use the sockets package.
 
 ## Authors
 
