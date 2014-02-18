@@ -53,6 +53,7 @@ For a simple string messaging connection, use ``sockets.Message()``
 ## Options
 You can configure the options for sockets by passing in ``sockets.Options`` as the second argument to ``sockets.JSON`` or as the first argument to ``sockets.Message``. Use it to configure the following options (defaults are used here):
 
+```go
 &sockets.Options{
 	// The logger to use for socket logging
 	Logger: log.New(os.Stdout, "[sockets] ", 0), // *log.Logger
@@ -89,6 +90,7 @@ You can configure the options for sockets by passing in ``sockets.Options`` as t
 	// How many messages can be asynchronously hold before the channel blocks
 	RecvChannelBuffer int
 }
+```
 
 ## gorilla vs go.net websockets
 The gorilla websocket package is a brilliant implementation of websockets which has [the following advantages](https://github.com/gorilla/websocket#protocol-compliance) over the go.net implementation.
