@@ -92,8 +92,8 @@ You can configure the options for sockets by passing in ``sockets.Options`` as t
 }
 ```
 
-## gorilla vs go.net websockets
-The gorilla websocket package is a brilliant implementation of websockets which has [the following advantages](https://github.com/gorilla/websocket#protocol-compliance) over the go.net implementation.
+## ``gorilla`` vs ``go.net`` websockets
+The gorilla websocket package is a brilliant implementation of RFC 6455 compliant websockets which has [these advantages over the go.net implementation.](https://github.com/gorilla/websocket#protocol-compliance)
 
 ## Authors
 
