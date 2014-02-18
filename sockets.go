@@ -111,6 +111,9 @@ type Connecter interface {
 	ErrorChannel() chan error
 }
 
+
+// Message Connection connects a websocket message connection to a string
+// channel.
 type MessageConnection struct {
 	*Connection
 
@@ -125,6 +128,8 @@ type MessageConnection struct {
 	Receiver chan string
 }
 
+// Message Connection connects a websocket message connection to a reflect.Value
+// channel.
 type JSONConnection struct {
 	*Connection
 
@@ -169,18 +174,10 @@ func Messages(options ...*Options) martini.Handler {
 	o := newOptions(options)
 
 	return func(context martini.Context, resp http.ResponseWriter, req *http.Request) {
-		// Check the request for cross origin access or HTTP methods other than GET
-		status, err := checkRequest(req, o)
+		// Upgrade the request to a websocket connection
+		ws, status, err := upgradeRequest(resp, req, o)
 		if err != nil {
 			resp.WriteHeader(status)
-			resp.Write([]byte(err.Error()))
-			return
-		}
-
-		// Do handshake with the client and upgrade the connection to a websocket
-		ws, err := doHandshake(resp, req, o)
-		if err != nil {
-			resp.WriteHeader(http.StatusBadRequest)
 			resp.Write([]byte(err.Error()))
 			return
 		}
@@ -242,18 +239,10 @@ func JSON(bindStruct interface{}, options ...*Options) martini.Handler {
 	o := newOptions(options)
 
 	return func(context martini.Context, resp http.ResponseWriter, req *http.Request) {
-		// Check the request for cross origin access or HTTP methods other than GET
-		status, err := checkRequest(req, o)
+		// Upgrade the request to a websocket connection
+		ws, status, err := upgradeRequest(resp, req, o)
 		if err != nil {
 			resp.WriteHeader(status)
-			resp.Write([]byte(err.Error()))
-			return
-		}
-
-		// Do handshake with the client and upgrade the connection to a websocket
-		ws, err := doHandshake(resp, req, o)
-		if err != nil {
-			resp.WriteHeader(http.StatusBadRequest)
 			resp.Write([]byte(err.Error()))
 			return
 		}
@@ -566,11 +555,6 @@ func (c *JSONConnection) send() {
 }
 
 func (c *JSONConnection) recv() {
-	// Defer decrementing the wait group counter and closing the connection
-	defer func() {
-		c.log("Goroutine receiving from websocket has been closed", logLevelDebug)
-	}()
-
 	for {
 		message := c.newOfType()
 
@@ -585,6 +569,8 @@ func (c *JSONConnection) recv() {
 		c.log("Read message from socket: %v: %v", logLevelDebug, message.Type(), message.Interface())
 		c.Receiver.Send(message)
 	}
+	
+	c.log("Goroutine receiving from websocket has been closed", logLevelDebug)
 }
 
 // Creates a new empty message of the given struct type
@@ -699,33 +685,28 @@ func makeChanOfType(typ reflect.Type) reflect.Value {
 	return reflect.MakeChan(reflect.ChanOf(reflect.BothDir, typ), 1024)
 }
 
-// Check the given request for HTTP methods other than GET
-// Or Cross origin access
-func checkRequest(req *http.Request, o *Options) (int, error) {
+// Upgrade the connection to a websocket connection
+func upgradeRequest(resp http.ResponseWriter, req *http.Request, o *Options) (*websocket.Conn, int, error) {
 	if req.Method != "GET" {
 		o.log("Method %s is not allowed", logLevelWarning, req.RemoteAddr, req.Method)
-		return http.StatusMethodNotAllowed, errors.New("Method not allowed")
+		return nil, http.StatusMethodNotAllowed, errors.New("Method not allowed")
 	}
 	if r, err := regexp.MatchString("https?://"+req.Host+"$", req.Header.Get("Origin")); !r || err != nil {
 		o.log("Origin %s is not allowed", logLevelWarning, req.RemoteAddr, req.Host)
-		return http.StatusForbidden, errors.New("Origin not allowed")
+		return nil, http.StatusForbidden, errors.New("Origin not allowed")
 	}
 
 	o.log("Request to %s has been allowed for origin %s", logLevelDebug, req.RemoteAddr, req.Host, req.Header.Get("Origin"))
-	return http.StatusOK, nil
-}
-
-// Upgrade the connection to a websocket connection
-func doHandshake(resp http.ResponseWriter, req *http.Request, o *Options) (*websocket.Conn, error) {
+	
 	ws, err := websocket.Upgrade(resp, req, nil, 1024, 1024)
-	if _, ok := err.(websocket.HandshakeError); ok {
-		o.log("Handshake failed: %s", logLevelWarning, req.RemoteAddr, err.(websocket.HandshakeError))
-		return nil, err.(websocket.HandshakeError)
+	if handshakeErr, ok := err.(websocket.HandshakeError); ok {
+		o.log("Handshake failed: %s", logLevelWarning, req.RemoteAddr, handshakeErr)
+		return nil, http.StatusBadRequest, handshakeErr
 	} else if err != nil {
 		o.log("Handshake failed: %s", logLevelWarning, req.RemoteAddr, err)
-		return nil, err
+		return nil, http.StatusBadRequest, err
 	}
 
 	o.log("Connection established", logLevelInfo, req.RemoteAddr)
-	return ws, nil
+	return ws, http.StatusOK, nil
 }
