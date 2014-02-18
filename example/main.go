@@ -4,7 +4,6 @@ import (
    "github.com/codegangsta/martini"
    "github.com/martini-contrib/render"
    "github.com/beatrichartz/sockets"
-   "log"
    "sync"
 )
 
@@ -124,11 +123,9 @@ func main() {
 			case err := <-client.err:
 				client.out <- &Message{"", "There has been an error with your connection: " + err.Error()}
 			case msg := <-client.in:
-				log.Printf("got message %v", msg)
 				r.messageOtherClients(client, msg)
 			case <-client.done:
 				r.removeClient(client)
-				log.Printf("client disconnected")
 				return
 			}
 		}
