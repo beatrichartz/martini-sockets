@@ -21,19 +21,19 @@ import (
 
 const (
 	// Log levels 0-4. Use to set the log level you wish to go for
-	logLevelError   = 0
-	logLevelWarning = 1
-	logLevelInfo    = 2
-	logLevelDebug   = 3
+	LogLevelError   = 0
+	LogLevelWarning = 1
+	LogLevelInfo    = 2
+	LogLevelDebug   = 3
 
 	// Sensible defaults for the socket
-	defaultLogLevel          = logLevelInfo
+	defaultLogLevel          = LogLevelInfo
 	defaultWriteWait         = 60 * time.Second
 	defaultPongWait          = 60 * time.Second
 	defaultPingPeriod        = (defaultPongWait * 8 / 10)
-	defaultMaxMessageSize    = 512
-	defaultSendChannelBuffer = 1024
-	defaultRecvChannelBuffer = 1024
+	defaultMaxMessageSize    = 65536
+	defaultSendChannelBuffer = 10
+	defaultRecvChannelBuffer = 10
 )
 
 type Options struct {
@@ -57,10 +57,10 @@ type Options struct {
 	MaxMessageSize int64
 
 	// The send channel buffer
-	SendChannelBuffer int64
+	SendChannelBuffer int
 
 	// The receiving channel buffer
-	RecvChannelBuffer int64
+	RecvChannelBuffer int
 }
 
 type Connection struct {
@@ -240,21 +240,21 @@ func makeHandler(binding interface{}, o *Options) martini.Handler {
 }
 
 // Log Level to strings slice
-var logLevelStrings = []string{"Error", "Warning", "Info", "Debug"}
+var LogLevelStrings = []string{"Error", "Warning", "Info", "Debug"}
 
 // The options logger is only directly used while setting up the connection
 // With the default logger, it logs in the format [socket][client remote address] log message
-func (o *Options) log(message string, logLevel int, logVars ...interface{}) {
-	if logLevel <= o.LogLevel {
-		o.Logger.Printf("[%s] [%s] "+message, append([]interface{}{logLevelStrings[logLevel]}, logVars...)...)
+func (o *Options) log(message string, LogLevel int, logVars ...interface{}) {
+	if LogLevel <= o.LogLevel {
+		o.Logger.Printf("[%s] [%s] "+message, append([]interface{}{LogLevelStrings[LogLevel]}, logVars...)...)
 	}
 }
 
 // The connection logger writes to the option logger using the cached remote address
 // for this connection
-func (c *Connection) log(message string, logLevel int, logVars ...interface{}) {
-	if logLevel <= c.LogLevel {
-		c.Options.log(message, logLevel, append([]interface{}{c.remoteAddr}, logVars...)...)
+func (c *Connection) log(message string, LogLevel int, logVars ...interface{}) {
+	if LogLevel <= c.LogLevel {
+		c.Options.log(message, LogLevel, append([]interface{}{c.remoteAddr}, logVars...)...)
 	}
 }
 
@@ -264,7 +264,7 @@ func (c *Connection) setSocketOptions() {
 	c.ws.SetReadLimit(c.MaxMessageSize)
 	c.keepAlive()
 	c.ws.SetPongHandler(func(string) error {
-		c.log("Received Pong from Client", logLevelDebug)
+		c.log("Received Pong from Client", LogLevelDebug)
 		c.keepAlive()
 		return nil
 	})
@@ -288,18 +288,18 @@ func (c *Connection) Close(closeCode int) error {
 	c.ws.SetReadDeadline(time.Now())
 
 	// Send close message to the client
-	c.log("Sending close message to client", logLevelDebug)
+	c.log("Sending close message to client", LogLevelDebug)
 	c.ws.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(closeCode, ""), time.Now().Add(c.WriteWait))
 
 	// If the connection can not be closed, return the error
-	c.log("Closing websocket connection", logLevelDebug)
+	c.log("Closing websocket connection", LogLevelDebug)
 	if err := c.ws.Close(); err != nil {
-		c.log("Connection could not be closed: %s", logLevelError, err.Error())
+		c.log("Connection could not be closed: %s", LogLevelError, err.Error())
 		return err
 	}
 
 	// Send disconnect message to the next handler
-	c.log("Sending disconnect to handler", logLevelDebug)
+	c.log("Sending disconnect to handler", LogLevelDebug)
 	c.Done <- true
 
 	// Close disconnect and error channels this connection was sending on
@@ -311,31 +311,31 @@ func (c *Connection) Close(closeCode int) error {
 
 // Ping the client through the websocket
 func (c *Connection) ping() error {
-	c.log("Pinging socket", logLevelDebug)
+	c.log("Pinging socket", LogLevelDebug)
 	return c.ws.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(c.WriteWait))
 }
 
 // Start the ticker used for pinging the client
 func (c *Connection) startTicker() {
-	c.log("Pinging every %v, first at %v", logLevelDebug, c.PingPeriod, time.Now().Add(c.PingPeriod))
+	c.log("Pinging every %v, first at %v", LogLevelDebug, c.PingPeriod, time.Now().Add(c.PingPeriod))
 	c.ticker = time.NewTicker(c.PingPeriod)
 }
 
 // Stop the ticker used for pinging the client
 func (c *Connection) stopTicker() {
-	c.log("Stopped pinging socket", logLevelDebug)
+	c.log("Stopped pinging socket", LogLevelDebug)
 	c.ticker.Stop()
 }
 
 // Keep the connection alive by refreshing the deadlines.
 func (c *Connection) keepAlive() {
-	c.log("Setting read deadline to %v", logLevelDebug, time.Now().Add(c.PongWait))
+	c.log("Setting read deadline to %v", LogLevelDebug, time.Now().Add(c.PongWait))
 	c.ws.SetReadDeadline(time.Now().Add(c.PongWait))
 	if c.WriteWait == 0 {
-		c.log("Write deadline set to 0, will never expire", logLevelDebug)
+		c.log("Write deadline set to 0, will never expire", LogLevelDebug)
 		c.ws.SetWriteDeadline(time.Time{})
 	} else {
-		c.log("Setting write deadline to %v", logLevelDebug, time.Now().Add(c.WriteWait))
+		c.log("Setting write deadline to %v", LogLevelDebug, time.Now().Add(c.WriteWait))
 		c.ws.SetWriteDeadline(time.Now().Add(c.WriteWait))
 	}
 }
@@ -356,7 +356,7 @@ func (c *Connection) ErrorChannel() chan error {
 // Except for the send channel, since it should be closed by the handler sending on it.
 func (c *MessageConnection) Close(closeCode int) error {
 	// Call close on the base connection
-	c.log("Closing websocket connection", logLevelDebug)
+	c.log("Closing websocket connection", LogLevelDebug)
 	err := c.Connection.Close(closeCode)
 
 	if err != nil {
@@ -365,7 +365,7 @@ func (c *MessageConnection) Close(closeCode int) error {
 
 	// Close the receiver
 	close(c.Receiver)
-	c.log("Connection closed", logLevelInfo)
+	c.log("Connection closed", LogLevelInfo)
 
 	return nil
 }
@@ -385,7 +385,7 @@ func (c *MessageConnection) send() {
 	c.startTicker()
 	defer func() {
 		c.stopTicker()
-		c.log("Goroutine sending to websocket has been closed", logLevelDebug)
+		c.log("Goroutine sending to websocket has been closed", LogLevelDebug)
 	}()
 
 	for {
@@ -393,14 +393,14 @@ func (c *MessageConnection) send() {
 		// Receiving a message from the next handler
 		case message, ok := <-c.Sender:
 			if !ok {
-				c.log("Sender channel has been closed", logLevelError)
+				c.log("Sender channel has been closed", LogLevelError)
 				c.disconnect <- errors.New("Sender channel has been closed")
 				return
 			}
 			// Write the message as a byte array to the socket
-			c.log("Writing %s to socket", logLevelDebug, message)
+			c.log("Writing %s to socket", LogLevelDebug, message)
 			if err := c.write(websocket.TextMessage, message); err != nil {
-				c.log("Error writing to socket: %s", logLevelError, err)
+				c.log("Error writing to socket: %s", LogLevelError, err)
 				c.disconnect <- err
 				return
 			}
@@ -409,9 +409,9 @@ func (c *MessageConnection) send() {
 		// Ping the client
 		case <-c.ticker.C:
 			err := c.ping()
-			c.log("%s", logLevelDebug, err)
+			c.log("%s", LogLevelDebug, err)
 			if err := c.ping(); err != nil {
-				c.log("Error pinging socket: %s", logLevelError, err)
+				c.log("Error pinging socket: %s", LogLevelError, err)
 				c.disconnect <- err
 				return
 			}
@@ -426,19 +426,19 @@ func (c *MessageConnection) send() {
 func (c *MessageConnection) recv() {
 	// Defer decrementing the wait group counter and closing the connection
 	defer func() {
-		c.log("Goroutine receiving from websocket has been closed", logLevelDebug)
+		c.log("Goroutine receiving from websocket has been closed", LogLevelDebug)
 	}()
 
 	for {
 		// Read a message from the client
 		_, message, err := c.ws.ReadMessage()
 		if err != nil {
-			c.log("Error reading from socket: %s", logLevelError, err)
+			c.log("Error reading from socket: %s", LogLevelError, err)
 			c.disconnect <- err
 			return
 		}
 		// Send the message as a string to the next handler
-		c.log("Read message from socket, %s", logLevelDebug, string(message))
+		c.log("Read message from socket, %s", LogLevelDebug, string(message))
 		c.Receiver <- string(message)
 		c.keepAlive()
 	}
@@ -455,7 +455,7 @@ func (c *MessageConnection) mapChannels(context martini.Context) {
 // Except for the send channel, since it should be closed by the handler sending on it.
 func (c *JSONConnection) Close(closeCode int) error {
 	// Call close on the base connection
-	c.log("Closing websocket connection", logLevelDebug)
+	c.log("Closing websocket connection", LogLevelDebug)
 	err := c.Connection.Close(closeCode)
 	if err != nil {
 		return err
@@ -463,7 +463,7 @@ func (c *JSONConnection) Close(closeCode int) error {
 
 	// Close the receiver
 	c.Receiver.Close()
-	c.log("Connection closed", logLevelInfo)
+	c.log("Connection closed", LogLevelInfo)
 
 	return nil
 }
@@ -480,7 +480,7 @@ func (c *JSONConnection) send() {
 	c.startTicker()
 	defer func() {
 		c.stopTicker()
-		c.log("Goroutine sending to websocket has been closed", logLevelDebug)
+		c.log("Goroutine sending to websocket has been closed", LogLevelDebug)
 	}()
 
 	// Creating the select cases for the channel select
@@ -501,13 +501,13 @@ func (c *JSONConnection) send() {
 		// Receiving a message from the next handler
 		case senderSend:
 			if !ok {
-				c.log("Sender channel has been closed", logLevelError)
+				c.log("Sender channel has been closed", LogLevelError)
 				c.disconnect <- errors.New("Sender channel has been closed")
 				return
 			}
-			c.log("Writing %v: %v to socket", logLevelDebug, message.Type(), message.Interface())
+			c.log("Writing %v: %v to socket", LogLevelDebug, message.Type(), message.Interface())
 			if err := c.ws.WriteJSON(message.Interface()); err != nil {
-				c.log("Error writing to socket: %s", logLevelError, err)
+				c.log("Error writing to socket: %s", LogLevelError, err)
 				c.disconnect <- err
 				break
 			}
@@ -515,7 +515,7 @@ func (c *JSONConnection) send() {
 		// Pinging the client
 		case tickerTick:
 			if err := c.ping(); err != nil {
-				c.log("Error pinging socket: %s", logLevelError, err)
+				c.log("Error pinging socket: %s", LogLevelError, err)
 				c.disconnect <- err
 				return
 			}
@@ -532,17 +532,17 @@ func (c *JSONConnection) recv() {
 
 		err := c.ws.ReadJSON(message.Interface())
 		if err != nil {
-			c.log("Error reading from socket: %s", logLevelError, err)
+			c.log("Error reading from socket: %s", LogLevelError, err)
 			c.disconnect <- err
 			break
 		}
 
 		// Send the message to the next handler
-		c.log("Read message from socket: %v: %v", logLevelDebug, message.Type(), message.Interface())
+		c.log("Read message from socket: %v: %v", LogLevelDebug, message.Type(), message.Interface())
 		c.Receiver.Send(message)
 	}
 
-	c.log("Goroutine receiving from websocket has been closed", logLevelDebug)
+	c.log("Goroutine receiving from websocket has been closed", LogLevelDebug)
 }
 
 // Creates a new empty message of the given struct type
@@ -598,15 +598,15 @@ func newBinding(iFace interface{}, ws *websocket.Conn, o *Options) Binding {
 	if typ.Kind() == reflect.String {
 		return &MessageConnection{
 			newConnection(ws, o),
-			make(chan string, 1024),
-			make(chan string, 1024),
+			make(chan string, o.SendChannelBuffer),
+			make(chan string, o.RecvChannelBuffer),
 		}
 	}
 
 	return &JSONConnection{
 		newConnection(ws, o),
-		makeChanOfType(typ),
-		makeChanOfType(typ),
+		makeChanOfType(typ, o.SendChannelBuffer),
+		makeChanOfType(typ, o.RecvChannelBuffer),
 	}
 }
 
@@ -658,32 +658,32 @@ func newOptions(options []*Options) *Options {
 }
 
 // Create a chan of the given type as a reflect.Value
-func makeChanOfType(typ reflect.Type) reflect.Value {
-	return reflect.MakeChan(reflect.ChanOf(reflect.BothDir, reflect.PtrTo(typ)), 1024)
+func makeChanOfType(typ reflect.Type, chanBuffer int) reflect.Value {
+	return reflect.MakeChan(reflect.ChanOf(reflect.BothDir, reflect.PtrTo(typ)), chanBuffer)
 }
 
 // Upgrade the connection to a websocket connection
 func upgradeRequest(resp http.ResponseWriter, req *http.Request, o *Options) (*websocket.Conn, int, error) {
 	if req.Method != "GET" {
-		o.log("Method %s is not allowed", logLevelWarning, req.RemoteAddr, req.Method)
+		o.log("Method %s is not allowed", LogLevelWarning, req.RemoteAddr, req.Method)
 		return nil, http.StatusMethodNotAllowed, errors.New("Method not allowed")
 	}
 	if r, err := regexp.MatchString("https?://"+req.Host+"$", req.Header.Get("Origin")); !r || err != nil {
-		o.log("Origin %s is not allowed", logLevelWarning, req.RemoteAddr, req.Host)
+		o.log("Origin %s is not allowed", LogLevelWarning, req.RemoteAddr, req.Host)
 		return nil, http.StatusForbidden, errors.New("Origin not allowed")
 	}
 
-	o.log("Request to %s has been allowed for origin %s", logLevelDebug, req.RemoteAddr, req.Host, req.Header.Get("Origin"))
+	o.log("Request to %s has been allowed for origin %s", LogLevelDebug, req.RemoteAddr, req.Host, req.Header.Get("Origin"))
 
 	ws, err := websocket.Upgrade(resp, req, nil, 1024, 1024)
 	if handshakeErr, ok := err.(websocket.HandshakeError); ok {
-		o.log("Handshake failed: %s", logLevelWarning, req.RemoteAddr, handshakeErr)
+		o.log("Handshake failed: %s", LogLevelWarning, req.RemoteAddr, handshakeErr)
 		return nil, http.StatusBadRequest, handshakeErr
 	} else if err != nil {
-		o.log("Handshake failed: %s", logLevelWarning, req.RemoteAddr, err)
+		o.log("Handshake failed: %s", LogLevelWarning, req.RemoteAddr, err)
 		return nil, http.StatusBadRequest, err
 	}
 
-	o.log("Connection established", logLevelInfo, req.RemoteAddr)
+	o.log("Connection established", LogLevelInfo, req.RemoteAddr)
 	return ws, http.StatusOK, nil
 }
