@@ -1,23 +1,23 @@
 package sockets
 
 import (
-	"github.com/gorilla/websocket"
 	"github.com/beatrichartz/martini"
-	"net/http/httptest"
+	"github.com/gorilla/websocket"
+	"io"
 	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 	"time"
-	"sync"
-	"strings"
-	"io"
 )
 
 const (
-	host string = "http://localhost:3000"
-	endpoint string = "ws://localhost:3000"
-	recvPath string = "/receiver"
-	sendPath string = "/sender"
-	pingPath string = "/ping"
+	host            string = "http://localhost:3000"
+	endpoint        string = "ws://localhost:3000"
+	recvPath        string = "/receiver"
+	sendPath        string = "/sender"
+	pingPath        string = "/ping"
 	recvStringsPath string = "/strings/receiver"
 	sendStringsPath string = "/strings/sender"
 	pingStringsPath string = "/strings/ping"
@@ -28,19 +28,19 @@ type Message struct {
 }
 
 var (
-	once sync.Once
-	recvMessages []*Message
-	recvCount int
-	recvDone bool
-	sendMessages []*Message
-	sendCount int
-	sendDone bool
-	recvStrings []string
+	once             sync.Once
+	recvMessages     []*Message
+	recvCount        int
+	recvDone         bool
+	sendMessages     []*Message
+	sendCount        int
+	sendDone         bool
+	recvStrings      []string
 	recvStringsCount int
-	recvStringsDone bool
-	sendStrings []string
+	recvStringsDone  bool
+	sendStrings      []string
 	sendStringsCount int
-	sendStringsDone bool
+	sendStringsDone  bool
 )
 
 // Test Helpers
@@ -106,104 +106,103 @@ func expectIsDone(t *testing.T, done bool) {
 
 func startServer() {
 	m := martini.Classic()
-	
+
 	m.Get(recvPath, JSON(Message{}), func(context martini.Context, receiver <-chan *Message, done <-chan bool) int {
 		for {
 			select {
-			case msg := <- receiver:
+			case msg := <-receiver:
 				recvMessages = append(recvMessages, msg)
 			case <-done:
 				recvDone = true
 				return http.StatusOK
 			}
 		}
-		
+
 		return http.StatusOK
 	})
-	
+
 	m.Get(sendPath, JSON(Message{}), func(context martini.Context, sender chan<- *Message, done <-chan bool, disconnect chan<- int) int {
-		ticker := time.NewTicker(1*time.Millisecond)
-		bomb   := time.After(4*time.Millisecond)
-		
+		ticker := time.NewTicker(1 * time.Millisecond)
+		bomb := time.After(4 * time.Millisecond)
+
 		for {
 			select {
 			case <-ticker.C:
-				sender<- &Message{"Hello World"}
+				sender <- &Message{"Hello World"}
 			case <-done:
 				ticker.Stop()
 				sendDone = true
 				return http.StatusOK
 			case <-bomb:
-				disconnect<-websocket.CloseGoingAway
+				disconnect <- websocket.CloseGoingAway
 				return http.StatusOK
 			}
 		}
-		
+
 		return http.StatusOK
 	})
-	
+
 	m.Get(recvStringsPath, Messages(), func(context martini.Context, receiver <-chan string, done <-chan bool) int {
 		for {
 			select {
-			case msg := <- receiver:
+			case msg := <-receiver:
 				recvStrings = append(recvStrings, msg)
 			case <-done:
 				recvStringsDone = true
 				return http.StatusOK
 			}
 		}
-		
+
 		return http.StatusOK
 	})
-	
+
 	m.Get(sendStringsPath, Messages(), func(context martini.Context, sender chan<- string, done <-chan bool, disconnect chan<- int) int {
-		ticker := time.NewTicker(1*time.Millisecond)
-		bomb   := time.After(4*time.Millisecond)
-		
+		ticker := time.NewTicker(1 * time.Millisecond)
+		bomb := time.After(4 * time.Millisecond)
+
 		for {
 			select {
 			case <-ticker.C:
-				sender<- "Hello World"
+				sender <- "Hello World"
 			case <-done:
 				ticker.Stop()
 				sendStringsDone = true
 				return http.StatusOK
 			case <-bomb:
-				disconnect<-websocket.CloseGoingAway
-				
+				disconnect <- websocket.CloseGoingAway
+
 				return http.StatusOK
 			}
 		}
-		
+
 		return http.StatusOK
 	})
 
 	go m.Run()
-	time.Sleep(5*time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
 }
 
 func connectSocket(t *testing.T, path string) (*websocket.Conn, *http.Response) {
 	header := make(http.Header)
 	header.Add("Origin", host)
-	ws, resp, err := websocket.DefaultDialer.Dial(endpoint + path, header)
+	ws, resp, err := websocket.DefaultDialer.Dial(endpoint+path, header)
 	if err != nil {
 		t.Fatalf("Connecting the socket failed: %s", err.Error())
 	}
-	
+
 	return ws, resp
 }
 
 func TestStringReceive(t *testing.T) {
 	once.Do(startServer)
 	expectStringsToBeEmpty(t, recvStrings)
-	
+
 	ws, resp := connectSocket(t, recvStringsPath)
 
-
 	ticker := time.NewTicker(time.Millisecond)
-	
+
 	for {
-		<- ticker.C
+		<-ticker.C
 		s := "Hello World"
 		err := ws.WriteMessage(websocket.TextMessage, []byte(s))
 		if err != nil {
@@ -215,7 +214,7 @@ func TestStringReceive(t *testing.T) {
 			return
 		}
 	}
-		
+
 	expectStringsToHaveArrived(t, 3, recvStrings)
 	expectStatusCode(t, http.StatusSwitchingProtocols, resp.StatusCode)
 	expectIsDone(t, recvStringsDone)
@@ -224,7 +223,7 @@ func TestStringReceive(t *testing.T) {
 func TestStringSend(t *testing.T) {
 	once.Do(startServer)
 	expectStringsToBeEmpty(t, sendStrings)
-	
+
 	ws, resp := connectSocket(t, sendStringsPath)
 	defer ws.Close()
 
@@ -248,15 +247,15 @@ func TestStringSend(t *testing.T) {
 func TestJSONReceive(t *testing.T) {
 	once.Do(startServer)
 	expectMessagesToBeEmpty(t, recvMessages)
-	
+
 	ws, resp := connectSocket(t, recvPath)
-	
+
 	message := &Message{"Hello World"}
-	
+
 	ticker := time.NewTicker(time.Millisecond)
-	
+
 	for {
-		<- ticker.C
+		<-ticker.C
 		err := ws.WriteJSON(message)
 		if err != nil {
 			t.Errorf("Writing to the socket failed with %v", err)
@@ -267,7 +266,7 @@ func TestJSONReceive(t *testing.T) {
 			return
 		}
 	}
-	
+
 	expectMessagesToHaveArrived(t, 3, recvMessages)
 	expectStatusCode(t, http.StatusSwitchingProtocols, resp.StatusCode)
 	expectIsDone(t, recvDone)
@@ -276,10 +275,10 @@ func TestJSONReceive(t *testing.T) {
 func TestJSONSend(t *testing.T) {
 	once.Do(startServer)
 	expectMessagesToBeEmpty(t, sendMessages)
-	
+
 	ws, resp := connectSocket(t, sendPath)
 	defer ws.Close()
-	
+
 	for {
 		msg := &Message{}
 		err := ws.ReadJSON(msg)
@@ -300,7 +299,7 @@ func TestJSONSend(t *testing.T) {
 func TestCrossOrigin(t *testing.T) {
 	header := make(http.Header)
 	header.Add("Origin", "http://somewhere.com")
-	_, resp, err := websocket.DefaultDialer.Dial(endpoint + sendPath, header)
+	_, resp, err := websocket.DefaultDialer.Dial(endpoint+sendPath, header)
 	if err == nil {
 		t.Fatalf("Connecting to the socket succeeded with a cross origin request")
 	}
@@ -309,18 +308,18 @@ func TestCrossOrigin(t *testing.T) {
 
 func TestUnallowedMethods(t *testing.T) {
 	m := martini.Classic()
-	
+
 	recorder := httptest.NewRecorder()
 	req, err := http.NewRequest("POST", "/test", strings.NewReader(""))
 
 	if err != nil {
 		t.Error(err)
 	}
-	
+
 	m.Any("/test", Messages(), func() int {
 		return http.StatusOK
 	})
-	
+
 	m.ServeHTTP(recorder, req)
 	expectStatusCode(t, http.StatusMethodNotAllowed, recorder.Code)
 }

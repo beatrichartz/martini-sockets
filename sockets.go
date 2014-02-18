@@ -21,11 +21,11 @@ import (
 
 const (
 	// Log levels 0-4. Use to set the log level you wish to go for
-	logLevelError            = 0
-	logLevelWarning          = 1
-	logLevelInfo             = 2
-	logLevelDebug            = 3
-	
+	logLevelError   = 0
+	logLevelWarning = 1
+	logLevelInfo    = 2
+	logLevelDebug   = 3
+
 	// Sensible defaults for the socket
 	defaultLogLevel          = logLevelInfo
 	defaultWriteWait         = 60 * time.Second
@@ -68,7 +68,7 @@ type Connection struct {
 
 	// The websocket connection
 	ws *websocket.Conn
-	
+
 	// The remote Address of the client using this connection. Cached on the
 	// connection for logging.
 	remoteAddr net.Addr
@@ -83,7 +83,7 @@ type Connection struct {
 	// given closing message. This channel gets mapped for the next
 	// handler to use.
 	Disconnect chan int
-	
+
 	// The done channel gets called only when the connection
 	// has been successfully disconnected. Any sends to the disconnect
 	// channel are currently ignored. This channel gets mapped for the next
@@ -190,7 +190,7 @@ func Messages(options ...*Options) martini.Handler {
 
 		// Set the options for the gorilla websocket package
 		c.setSocketOptions()
-		
+
 		// Map the Receiver to a chan<- string for the next Handler(s)
 		context.Set(reflect.ChanOf(reflect.SendDir, reflect.TypeOf(c.Sender).Elem()), reflect.ValueOf(c.Sender))
 
@@ -290,7 +290,7 @@ var logLevelStrings = []string{"Error", "Warning", "Info", "Debug"}
 // With the default logger, it logs in the format [socket][client remote address] log message
 func (o *Options) log(message string, logLevel int, logVars ...interface{}) {
 	if logLevel <= o.LogLevel {
-		o.Logger.Printf("[%s] [%s] " + message, append([]interface{}{logLevelStrings[logLevel]}, logVars...)...)
+		o.Logger.Printf("[%s] [%s] "+message, append([]interface{}{logLevelStrings[logLevel]}, logVars...)...)
 	}
 }
 
@@ -321,7 +321,7 @@ func (c *Connection) mapDefaultChannels(context martini.Context) {
 
 	// Map the Disconnect Channel to a chan<- bool for the next Handler(s)
 	context.Set(reflect.ChanOf(reflect.SendDir, reflect.TypeOf(c.Disconnect).Elem()), reflect.ValueOf(c.Disconnect))
-	
+
 	// Map the Done Channel to a <-chan bool for the next Handler(s)
 	context.Set(reflect.ChanOf(reflect.RecvDir, reflect.TypeOf(c.Done).Elem()), reflect.ValueOf(c.Done))
 }
@@ -332,7 +332,7 @@ func (c *Connection) Close(closeCode int) error {
 	c.disconnectSend <- true
 	//TODO look for a better way to unblock the reader
 	c.ws.SetReadDeadline(time.Now())
-	
+
 	// Send close message to the client
 	c.log("Sending close message to client", logLevelDebug)
 	c.ws.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(closeCode, ""), time.Now().Add(c.WriteWait))
@@ -347,7 +347,7 @@ func (c *Connection) Close(closeCode int) error {
 	// Send disconnect message to the next handler
 	c.log("Sending disconnect to handler", logLevelDebug)
 	c.Done <- true
-		
+
 	// Close disconnect and error channels this connection was sending on
 	close(c.Done)
 	close(c.Error)
@@ -386,15 +386,15 @@ func (c *Connection) keepAlive() {
 	}
 }
 
-func (c *Connection) disconnectChannel() (chan error) {
+func (c *Connection) disconnectChannel() chan error {
 	return c.disconnect
 }
 
-func (c *Connection) DisconnectChannel() (chan int) {
+func (c *Connection) DisconnectChannel() chan int {
 	return c.Disconnect
 }
 
-func (c *Connection) ErrorChannel() (chan error) {
+func (c *Connection) ErrorChannel() chan error {
 	return c.Error
 }
 
@@ -404,7 +404,7 @@ func (c *MessageConnection) Close(closeCode int) error {
 	// Call close on the base connection
 	c.log("Closing websocket connection", logLevelDebug)
 	err := c.Connection.Close(closeCode)
-		
+
 	if err != nil {
 		return err
 	}
@@ -654,10 +654,10 @@ func newConnection(ws *websocket.Conn, o *Options) *Connection {
 		ws,
 		ws.RemoteAddr(),
 		make(chan error, 1),
-		make(chan int,   1),
-		make(chan bool,  3),
+		make(chan int, 1),
+		make(chan bool, 3),
 		make(chan error, 1),
-		make(chan bool,  1),
+		make(chan bool, 1),
 		nil,
 	}
 }
