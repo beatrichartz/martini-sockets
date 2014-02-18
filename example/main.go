@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/beatrichartz/martini"
 	"github.com/beatrichartz/martini-sockets"
-	"github.com/martini-contrib/render"
+	"github.com/beatrichartz/render"
 	"sync"
 )
 
