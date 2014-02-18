@@ -102,15 +102,17 @@ type Connection struct {
 	ticker *time.Ticker
 }
 
-type Connecter interface {
+type Binding interface {
 	Close(int) error
 	recv()
 	send()
+	setSocketOptions()
+	mapChannels(martini.Context)
+	mapDefaultChannels(martini.Context)
 	disconnectChannel() chan error
 	DisconnectChannel() chan int
 	ErrorChannel() chan error
 }
-
 
 // Message Connection connects a websocket message connection to a string
 // channel.
@@ -132,9 +134,6 @@ type MessageConnection struct {
 // channel.
 type JSONConnection struct {
 	*Connection
-
-	// The passed type associated with this connection
-	typ reflect.Type
 
 	// Sender is the channel used for sending out JSON to the client.
 	// This channel gets mapped for the next handler to use with the right type
@@ -171,40 +170,7 @@ type JSONConnection struct {
 // An optional sockets.Options object can be passed to Messages to overwrite
 // default options mentioned in the documentation of the Options object.
 func Messages(options ...*Options) martini.Handler {
-	o := newOptions(options)
-
-	return func(context martini.Context, resp http.ResponseWriter, req *http.Request) {
-		// Upgrade the request to a websocket connection
-		ws, status, err := upgradeRequest(resp, req, o)
-		if err != nil {
-			resp.WriteHeader(status)
-			resp.Write([]byte(err.Error()))
-			return
-		}
-
-		// Set up the messages connection
-		c := newMessagesConnection(ws, o)
-
-		// Set the options for the gorilla websocket package
-		c.setSocketOptions()
-
-		// Map the Receiver to a chan<- string for the next Handler(s)
-		context.Set(reflect.ChanOf(reflect.SendDir, reflect.TypeOf(c.Sender).Elem()), reflect.ValueOf(c.Sender))
-
-		// Map the Receiver to a <-chan string for the next Handler(s)
-		context.Set(reflect.ChanOf(reflect.RecvDir, reflect.TypeOf(c.Receiver).Elem()), reflect.ValueOf(c.Receiver))
-
-		// Map the Channels <-chan error, <-chan bool and chan<- bool
-		c.mapDefaultChannels(context)
-
-		// start the send and receive goroutines
-		go c.send()
-		go c.recv()
-		go waitForDisconnect(c)
-
-		// call the next handler, which must block
-		context.Next()
-	}
+	return makeHandler("", newOptions(options))
 }
 
 // JSON returns a websocket handling middleware. It can only be used
@@ -236,7 +202,11 @@ func Messages(options ...*Options) martini.Handler {
 // An optional sockets.Options object can be passed to Messages to overwrite
 // default options mentioned in the documentation of the Options object.
 func JSON(bindStruct interface{}, options ...*Options) martini.Handler {
-	o := newOptions(options)
+	return makeHandler(bindStruct, newOptions(options))
+}
+
+// Generates a handler from an interface
+func makeHandler(binding interface{}, o *Options) martini.Handler {
 
 	return func(context martini.Context, resp http.ResponseWriter, req *http.Request) {
 		// Upgrade the request to a websocket connection
@@ -247,17 +217,14 @@ func JSON(bindStruct interface{}, options ...*Options) martini.Handler {
 			return
 		}
 
-		// Set up the JSON connection
-		c := newJSONConnection(bindStruct, ws, o)
+		// Set up the connection
+		c := newBinding(binding, ws, o)
 
 		// Set the options for the gorilla websocket package
 		c.setSocketOptions()
 
-		// Map the Sender to a chan<- *Message for the next Handler(s)
-		context.Set(reflect.ChanOf(reflect.SendDir, c.typ), c.Sender)
-
-		// Map the Receiver to a <-chan *Message for the next Handler(s)
-		context.Set(reflect.ChanOf(reflect.RecvDir, c.typ), c.Receiver)
+		// Map the sending and receiving channels
+		c.mapChannels(context)
 
 		// Map the Channels <-chan error, <-chan bool and chan<- bool
 		c.mapDefaultChannels(context)
@@ -304,14 +271,12 @@ func (c *Connection) setSocketOptions() {
 }
 
 // Helper method to map default channels in the context
+// Map the Error Channel to a <-chan error for the next Handler(s)
+// Map the Disconnect Channel to a chan<- bool for the next Handler(s)
+// Map the Done Channel to a <-chan bool for the next Handler(s)
 func (c *Connection) mapDefaultChannels(context martini.Context) {
-	// Map the Error Channel to a <-chan error for the next Handler(s)
 	context.Set(reflect.ChanOf(reflect.RecvDir, reflect.TypeOf(c.Error).Elem()), reflect.ValueOf(c.Error))
-
-	// Map the Disconnect Channel to a chan<- bool for the next Handler(s)
 	context.Set(reflect.ChanOf(reflect.SendDir, reflect.TypeOf(c.Disconnect).Elem()), reflect.ValueOf(c.Disconnect))
-
-	// Map the Done Channel to a <-chan bool for the next Handler(s)
 	context.Set(reflect.ChanOf(reflect.RecvDir, reflect.TypeOf(c.Done).Elem()), reflect.ValueOf(c.Done))
 }
 
@@ -479,6 +444,13 @@ func (c *MessageConnection) recv() {
 	}
 }
 
+// Map the Receiver to a chan<- string for the next Handler(s)
+// Map the Receiver to a <-chan string for the next Handler(s)
+func (c *MessageConnection) mapChannels(context martini.Context) {
+	context.Set(reflect.ChanOf(reflect.SendDir, reflect.TypeOf(c.Sender).Elem()), reflect.ValueOf(c.Sender))
+	context.Set(reflect.ChanOf(reflect.RecvDir, reflect.TypeOf(c.Receiver).Elem()), reflect.ValueOf(c.Receiver))
+}
+
 // Close the JSON connection. Closes the send goroutine and all channels used
 // Except for the send channel, since it should be closed by the handler sending on it.
 func (c *JSONConnection) Close(closeCode int) error {
@@ -569,13 +541,20 @@ func (c *JSONConnection) recv() {
 		c.log("Read message from socket: %v: %v", logLevelDebug, message.Type(), message.Interface())
 		c.Receiver.Send(message)
 	}
-	
+
 	c.log("Goroutine receiving from websocket has been closed", logLevelDebug)
 }
 
 // Creates a new empty message of the given struct type
 func (c *JSONConnection) newOfType() reflect.Value {
-	return reflect.New(c.typ.Elem())
+	return reflect.New(c.Sender.Type().Elem().Elem())
+}
+
+// Map the Sender to a chan<- *Message for the next Handler(s)
+// Map the Receiver to a <-chan *Message for the next Handler(s)
+func (c *JSONConnection) mapChannels(context martini.Context) {
+	context.Set(reflect.ChanOf(reflect.SendDir, c.Sender.Type().Elem()), c.Sender)
+	context.Set(reflect.ChanOf(reflect.RecvDir, c.Receiver.Type().Elem()), c.Receiver)
 }
 
 // Waits for a disconnect message and closes the connection with an appropriate close message.
@@ -593,7 +572,7 @@ func (c *JSONConnection) newOfType() reflect.Value {
 // CloseMandatoryExtension      = 1010
 // CloseInternalServerErr       = 1011
 // CloseTLSHandshake            = 1015
-func waitForDisconnect(c Connecter) {
+func waitForDisconnect(c Binding) {
 	for {
 		select {
 		case err := <-c.disconnectChannel():
@@ -613,23 +592,21 @@ func waitForDisconnect(c Connecter) {
 }
 
 // Creates a new JSON Connection
-func newJSONConnection(bindStruct interface{}, ws *websocket.Conn, o *Options) *JSONConnection {
-	typ := reflect.PtrTo(reflect.TypeOf(bindStruct))
+func newBinding(iFace interface{}, ws *websocket.Conn, o *Options) Binding {
+	typ := reflect.TypeOf(iFace)
+
+	if typ.Kind() == reflect.String {
+		return &MessageConnection{
+			newConnection(ws, o),
+			make(chan string, 1024),
+			make(chan string, 1024),
+		}
+	}
 
 	return &JSONConnection{
 		newConnection(ws, o),
-		typ,
 		makeChanOfType(typ),
 		makeChanOfType(typ),
-	}
-}
-
-// Creates a new Messages Connection
-func newMessagesConnection(ws *websocket.Conn, o *Options) *MessageConnection {
-	return &MessageConnection{
-		newConnection(ws, o),
-		make(chan string, 1024),
-		make(chan string, 1024),
 	}
 }
 
@@ -682,7 +659,7 @@ func newOptions(options []*Options) *Options {
 
 // Create a chan of the given type as a reflect.Value
 func makeChanOfType(typ reflect.Type) reflect.Value {
-	return reflect.MakeChan(reflect.ChanOf(reflect.BothDir, typ), 1024)
+	return reflect.MakeChan(reflect.ChanOf(reflect.BothDir, reflect.PtrTo(typ)), 1024)
 }
 
 // Upgrade the connection to a websocket connection
@@ -697,7 +674,7 @@ func upgradeRequest(resp http.ResponseWriter, req *http.Request, o *Options) (*w
 	}
 
 	o.log("Request to %s has been allowed for origin %s", logLevelDebug, req.RemoteAddr, req.Host, req.Header.Get("Origin"))
-	
+
 	ws, err := websocket.Upgrade(resp, req, nil, 1024, 1024)
 	if handshakeErr, ok := err.(websocket.HandshakeError); ok {
 		o.log("Handshake failed: %s", logLevelWarning, req.RemoteAddr, handshakeErr)
