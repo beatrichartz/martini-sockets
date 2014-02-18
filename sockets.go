@@ -13,7 +13,6 @@ import (
 	"os"
 	"reflect"
 	"regexp"
-	"sync"
 	"time"
 
 	"github.com/codegangsta/martini"
@@ -69,11 +68,7 @@ type Connection struct {
 
 	// The websocket connection
 	ws *websocket.Conn
-
-	// The wait group of this connection is used to assure that the send and
-	// receive handlers are terminated before discarding the entire connection.
-	wg sync.WaitGroup
-
+	
 	// The remote Address of the client using this connection. Cached on the
 	// connection for logging.
 	remoteAddr net.Addr
@@ -657,7 +652,6 @@ func newConnection(ws *websocket.Conn, o *Options) *Connection {
 	return &Connection{
 		o,
 		ws,
-		sync.WaitGroup{},
 		ws.RemoteAddr(),
 		make(chan error, 1),
 		make(chan int,   1),
