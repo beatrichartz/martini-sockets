@@ -1,7 +1,7 @@
 package main
 
 import (
-   "github.com/codegangsta/martini"
+   "github.com/beatrichartz/martini"
    "github.com/martini-contrib/render"
    "github.com/beatrichartz/martini-sockets"
    "sync"

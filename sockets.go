@@ -15,7 +15,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/codegangsta/martini"
+	"github.com/beatrichartz/martini"
 	"github.com/gorilla/websocket"
 )
 

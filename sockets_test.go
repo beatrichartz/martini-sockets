@@ -2,7 +2,7 @@ package sockets
 
 import (
 	"github.com/gorilla/websocket"
-	"github.com/codegangsta/martini"
+	"github.com/beatrichartz/martini"
 	"net/http/httptest"
 	"net/http"
 	"testing"
