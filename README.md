@@ -1,6 +1,6 @@
 # sockets [![wercker status](https://app.wercker.com/status/4298e26d2bb869fc9b0134ad80ef5eb3/s/master "wercker status")](https://app.wercker.com/project/bykey/4298e26d2bb869fc9b0134ad80ef5eb3)
 
-Sockets to channels binding for martini. This is currently (2/17/2014) still WIP.
+Sockets to channels binding for martini. This is currently (2/18/2014) still WIP.
 
 [API Reference](http://godoc.org/github.com/beatrichartz/sockets)
 
