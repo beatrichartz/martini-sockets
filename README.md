@@ -83,12 +83,12 @@ You can configure the options for sockets by passing in ``sockets.Options`` as t
 	MaxMessageSize 65536 // int64
 
 	// The send channel buffer
-	// How many messages can be asynchronously hold before the channel blocks
-	SendChannelBuffer int
+	// How many messages can be asynchronously held before the channel blocks
+	SendChannelBuffer 10 // int
 
 	// The receiving channel buffer
-	// How many messages can be asynchronously hold before the channel blocks
-	RecvChannelBuffer int
+	// How many messages can be asynchronously held before the channel blocks
+	RecvChannelBuffer 10 // int
 }
 ```
 
