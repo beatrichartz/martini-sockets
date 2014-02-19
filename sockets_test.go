@@ -1,7 +1,7 @@
 package sockets
 
 import (
-	"github.com/beatrichartz/martini"
+	"github.com/codegangsta/martini"
 	"github.com/gorilla/websocket"
 	"io"
 	"net/http"
