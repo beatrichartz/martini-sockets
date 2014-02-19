@@ -44,6 +44,12 @@ var (
 )
 
 // Test Helpers
+func expectSame(t *testing.T, a interface{}, b interface{}) {
+	if a != b {
+		t.Errorf("Expected %T: %v to be %T: %v", b, b, a, a)
+	}
+}
+
 func expectStringsToBeEmpty(t *testing.T, strings []string) {
 	if len(strings) > 0 {
 		t.Errorf("Expected strings array to be empty, but they contained %d values", len(strings))
@@ -294,6 +300,22 @@ func TestJSONSend(t *testing.T) {
 	expectMessagesToHaveArrived(t, 3, sendMessages)
 	expectStatusCode(t, http.StatusSwitchingProtocols, resp.StatusCode)
 	expectIsDone(t, sendDone)
+}
+
+func TestOptionsDefaultHandling(t *testing.T) {
+	o := newOptions([]*Options{
+		&Options{
+			LogLevel: LogLevelDebug,
+			WriteWait: 15 * time.Second,
+			PingPeriod: 10 * time.Second,
+		},
+	})
+	expectSame(t, o.LogLevel, LogLevelDebug)
+	expectSame(t, o.PingPeriod, 10 * time.Second)
+	expectSame(t, o.WriteWait, 15 * time.Second)
+	expectSame(t, o.MaxMessageSize, defaultMaxMessageSize)
+	expectSame(t, o.SendChannelBuffer, defaultSendChannelBuffer)
+	expectSame(t, o.RecvChannelBuffer, defaultRecvChannelBuffer)
 }
 
 func TestCrossOrigin(t *testing.T) {

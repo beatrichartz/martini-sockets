@@ -27,13 +27,13 @@ const (
 	LogLevelDebug   = 3
 
 	// Sensible defaults for the socket
-	defaultLogLevel          = LogLevelInfo
-	defaultWriteWait         = 60 * time.Second
-	defaultPongWait          = 60 * time.Second
-	defaultPingPeriod        = (defaultPongWait * 8 / 10)
-	defaultMaxMessageSize    = 65536
-	defaultSendChannelBuffer = 10
-	defaultRecvChannelBuffer = 10
+	defaultLogLevel                = LogLevelInfo
+	defaultWriteWait               = 60 * time.Second
+	defaultPongWait                = 60 * time.Second
+	defaultPingPeriod              = (defaultPongWait * 8 / 10)
+	defaultMaxMessageSize    int64 = 65536
+	defaultSendChannelBuffer       = 10
+	defaultRecvChannelBuffer       = 10
 )
 
 type Options struct {
@@ -42,6 +42,9 @@ type Options struct {
 
 	// The LogLevel for socket logging, goes from 0 (Error) to 3 (Debug)
 	LogLevel int
+
+	// Set to true if you want to skip loggin
+	SkipLogging bool
 
 	// The time to wait between writes before timing out the connection
 	// When this is a zero value time instance, write will never time out
@@ -245,7 +248,7 @@ var LogLevelStrings = []string{"Error", "Warning", "Info", "Debug"}
 // The options logger is only directly used while setting up the connection
 // With the default logger, it logs in the format [socket][client remote address] log message
 func (o *Options) log(message string, LogLevel int, logVars ...interface{}) {
-	if LogLevel <= o.LogLevel {
+	if LogLevel <= o.LogLevel && !o.SkipLogging {
 		o.Logger.Printf("[%s] [%s] "+message, append([]interface{}{LogLevelStrings[LogLevel]}, logVars...)...)
 	}
 }
@@ -627,9 +630,10 @@ func newConnection(ws *websocket.Conn, o *Options) *Connection {
 
 // Creates new default options and assigns any given options
 func newOptions(options []*Options) *Options {
-	o := &Options{
+	o := Options{
 		log.New(os.Stdout, "[sockets] ", 0),
 		defaultLogLevel,
+		false,
 		defaultWriteWait,
 		defaultPongWait,
 		defaultPingPeriod,
@@ -640,21 +644,21 @@ func newOptions(options []*Options) *Options {
 
 	// when all defaults, return it
 	if len(options) == 0 {
-		return o
+		return &o
 	}
 
 	// map the given values to the options
-	optionsValue := reflect.ValueOf(*options[0])
-	oValue := reflect.Indirect(reflect.ValueOf(o))
-	numFields := optionsValue.NumField()
+	optionsValue := reflect.ValueOf(options[0])
+	oValue := reflect.ValueOf(&o)
+	numFields := optionsValue.Elem().NumField()
 
 	for i := 0; i < numFields; i++ {
-		if value := optionsValue.Field(i); value.IsValid() {
-			oValue.Field(i).Set(value)
+		if value := optionsValue.Elem().Field(i); value.IsValid() && value.CanSet() && isNonEmptyOption(value) {
+			oValue.Elem().Field(i).Set(value)
 		}
 	}
 
-	return o
+	return &o
 }
 
 // Create a chan of the given type as a reflect.Value
@@ -686,4 +690,22 @@ func upgradeRequest(resp http.ResponseWriter, req *http.Request, o *Options) (*w
 
 	o.log("Connection established", LogLevelInfo, req.RemoteAddr)
 	return ws, http.StatusOK, nil
+}
+
+func isNonEmptyOption(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.String:
+		return v.Len() != 0
+	case reflect.Bool:
+		return v.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return v.Int() != 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return v.Uint() != 0
+	case reflect.Float32, reflect.Float64:
+		return v.Float() != 0
+	case reflect.Interface, reflect.Ptr:
+		return !v.IsNil()
+	}
+	return false
 }
