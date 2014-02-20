@@ -27,13 +27,13 @@ const (
 	LogLevelDebug   = 3
 
 	// Sensible defaults for the socket
-	defaultLogLevel                = LogLevelInfo
-	defaultWriteWait               = 60 * time.Second
-	defaultPongWait                = 60 * time.Second
-	defaultPingPeriod              = (defaultPongWait * 8 / 10)
-	defaultMaxMessageSize    int64 = 65536
-	defaultSendChannelBuffer       = 10
-	defaultRecvChannelBuffer       = 10
+	defaultLogLevel          = LogLevelInfo
+	defaultWriteWait         = 60 * time.Second
+	defaultPongWait          = 60 * time.Second
+	defaultPingPeriod        = (defaultPongWait * 8 / 10)
+	defaultMaxMessageSize int64    = 65536
+	defaultSendChannelBuffer = 10
+	defaultRecvChannelBuffer = 10
 )
 
 type Options struct {
@@ -42,7 +42,7 @@ type Options struct {
 
 	// The LogLevel for socket logging, goes from 0 (Error) to 3 (Debug)
 	LogLevel int
-
+	
 	// Set to true if you want to skip loggin
 	SkipLogging bool
 
@@ -366,8 +366,8 @@ func (c *MessageConnection) Close(closeCode int) error {
 		return err
 	}
 
-	// Close the receiver
-	close(c.Receiver)
+	// Do not close the receiver here since it would send nil
+	// Just let go
 	c.log("Connection closed", LogLevelInfo)
 
 	return nil
@@ -464,8 +464,8 @@ func (c *JSONConnection) Close(closeCode int) error {
 		return err
 	}
 
-	// Close the receiver
-	c.Receiver.Close()
+	// Do not close the receiver here since it would send nil
+	// Just let go
 	c.log("Connection closed", LogLevelInfo)
 
 	return nil
@@ -649,7 +649,7 @@ func newOptions(options []*Options) *Options {
 
 	// map the given values to the options
 	optionsValue := reflect.ValueOf(options[0])
-	oValue := reflect.ValueOf(&o)
+	oValue    := reflect.ValueOf(&o)
 	numFields := optionsValue.Elem().NumField()
 
 	for i := 0; i < numFields; i++ {
