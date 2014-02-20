@@ -5,6 +5,7 @@ import (
 	"github.com/martini-contrib/render"
 	"github.com/beatrichartz/martini-sockets"
 	"sync"
+	"log"
 )
 
 // Chat top level
@@ -22,6 +23,7 @@ type Room struct {
 
 // Client stores all the channels available in the handler in a struct.
 type Client struct {
+	Name       string
 	in         <-chan *Message
 	out        chan<- *Message
 	done       <-chan bool
@@ -31,7 +33,8 @@ type Client struct {
 
 // A simple Message struct
 type Message struct {
-	Name string `json:"name"`
+	Typ  string `json:"typ"`
+	From string `json:"from"`
 	Text string `json:"text"`
 }
 
@@ -67,7 +70,8 @@ func (r *Room) removeClient(client *Client) {
 	for index, c := range r.clients {
 		if c == client {
 			r.clients = append(r.clients[:index], r.clients[(index+1):]...)
-			break
+		} else {
+			c.out <- &Message{"status", client.Name, "Left this chat"}
 		}
 	}
 }
@@ -75,6 +79,8 @@ func (r *Room) removeClient(client *Client) {
 // Message all the other clients in the same room
 func (r *Room) messageOtherClients(client *Client, msg *Message) {
 	r.Lock()
+	msg.From = client.Name
+		
 	for _, c := range r.clients {
 		if c != client {
 			c.out <- msg
@@ -112,21 +118,28 @@ func main() {
 	})
 
 	// This is the sockets connection for the room, it is a json mapping to sockets.
-	m.Get("/sockets/rooms/:name", sockets.JSON(Message{}), func(params martini.Params, receiver <-chan *Message, sender chan<- *Message, done <-chan bool, disconnect chan<- int, err <-chan error) {
-		client := &Client{receiver, sender, done, err, disconnect}
+	m.Get("/sockets/rooms/:name/:clientname", sockets.JSON(Message{}), func(params martini.Params, receiver <-chan *Message, sender chan<- *Message, done <-chan bool, disconnect chan<- int, err <-chan error) (int,string) {
+		client := &Client{params["clientname"], receiver, sender, done, err, disconnect}
 		r := chat.getRoom(params["name"])
 		r.appendClient(client)
 
 		// A single select can be used to do all the messaging
 		for {
 			select {
-			case err := <-client.err:
-				client.out <- &Message{"", "There has been an error with your connection: " + err.Error()}
+			case <-client.err:
+				// Don't try to do this:
+				// client.out <- &Message{"system", "system", "There has been an error with your connection"}
+				// The socket connection is already long gone.
+				// Use the error for statistics etc
 			case msg := <-client.in:
+				log.Printf("Incoming: %v from %v", msg, client.Name)
+				
 				r.messageOtherClients(client, msg)
 			case <-client.done:
+				log.Printf("Removing client: %v", client.Name)
+				
 				r.removeClient(client)
-				return
+				return 200, "OK"
 			}
 		}
 	})

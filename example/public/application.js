@@ -14,7 +14,7 @@ var ChatRoom = function() {
   };
   
   c.connect = function() {
-    c.ws = new WebSocket("ws://" + location.host + "/sockets" + location.pathname);
+    c.ws = new WebSocket("ws://" + location.host + "/sockets" + location.pathname + '/' + c.client.name);
     return c;
   };
   
@@ -41,18 +41,38 @@ var ChatRoom = function() {
   
   c.send = function(messageData) {
     c.ws.send(JSON.stringify(messageData));
-    c.write(messageData, 'left');
-  }
+  };
+  
+  c.handleAway = function() {
+    window.addEventListener('blur', function(e) {
+      c.send({
+        typ: "status",
+        text: c.client.Name + ' is currently away from this chat'
+      });
+    });
+    
+    window.addEventListener('focus', function(e) {
+      c.send({
+        typ: "status",
+        text: c.client.Name + ' came back'
+      });
+    });
+  };
   
   c.handleSend = function() {
     c.sendForm.addEventListener("submit", function(e) {
       e.preventDefault();
       
       if (c.textInput.value && c.textInput.value.length) {
-        c.send({
-          name: c.client.name,
+        var messageData = {
+          typ: "message",
           text: c.textInput.value
-        });
+        };
+        
+        c.send(messageData);
+        
+        messageData.from = c.client.name;
+        c.write(messageData, 'left');
         
         c.textInput.value = ''
       }
@@ -72,6 +92,8 @@ var ChatRoom = function() {
         c.client.name = c.nameInput.value;
       }
       
+      c.connect().listen();
+      
       c.nameForm.parentElement.removeChild(c.nameForm);
       c.sendForm.parentElement.removeAttribute("class");
       
@@ -86,14 +108,14 @@ var ChatRoom = function() {
         name       = document.createElement("span"),
         message    = document.createElement("span");
     
-    name.innerHTML    = messageData.name;
+    name.innerHTML    = messageData.from;
     message.innerHTML = messageData.text;
     container.appendChild(name);
     container.appendChild(message);
     c.room.appendChild(container);
     
     requestAnimationFrame(function() {
-      container.className += className + ' show'
+      container.className += className + ' show ' + messageData.typ;
     });
     
     window.scrollTo(0, document.documentElement.scrollTop + 1000)
@@ -101,7 +123,7 @@ var ChatRoom = function() {
 
 
   var initialize = function() {
-    c.create().connect().listen().handleName().handleSend();
+    c.create().handleName().handleSend();
   }();
 };
 
@@ -130,7 +152,7 @@ var RoomForm = function() {
   }
   
   var initialize = function() {
-    r.create().handleForm();
+    r.create().handleForm().handleAway();
   }();
 }
 
@@ -143,7 +165,3 @@ window.addEventListener("load", function() {
     new RoomForm();
   }
 });
-
-window.addEventListener("beforeunload", function() {
-  chat.disconnect();
-})

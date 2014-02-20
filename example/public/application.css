@@ -82,6 +82,10 @@ form input[type="submit"]:hover {
   text-align: right;
 }
 
+#room p.status {
+  font-style: italic;
+}
+
 #room p.left {
   text-align: left;
 }
@@ -120,6 +124,6 @@ h1 {
   bottom: 0;
 }
 
-#name-form {
+#name-form, #room-form {
   margin-top: 3em;
 }
