@@ -1,6 +1,6 @@
 # sockets [![wercker status](https://app.wercker.com/status/4298e26d2bb869fc9b0134ad80ef5eb3/s/master "wercker status")](https://app.wercker.com/project/bykey/4298e26d2bb869fc9b0134ad80ef5eb3)
 
-Sockets to channels binding for martini. This is currently (2/18/2014) still WIP.
+Sockets to channels binding for martini. This is currently (2/20/2014) still WIP.
 
 [API Reference](http://godoc.org/github.com/beatrichartz/sockets)
 
@@ -65,6 +65,9 @@ You can configure the options for sockets by passing in ``sockets.Options`` as t
 	// sockets.LogLevelDebug (3)
 	
 	LogLevel: sockets.LogLevelInfo, // int
+	
+	// Set to true if you want to skip logging
+	SkipLogging: false // bool
 
 	// The time to wait between writes before timing out the connection
 	// When this is a zero value time instance, write will never time out
