@@ -43,7 +43,7 @@ type Options struct {
 	// The LogLevel for socket logging, goes from 0 (Error) to 3 (Debug)
 	LogLevel int
 	
-	// Set to true if you want to skip loggin
+	// Set to true if you want to skip logging
 	SkipLogging bool
 
 	// The time to wait between writes before timing out the connection
