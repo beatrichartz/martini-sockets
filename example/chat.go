@@ -5,7 +5,6 @@ import (
 	"github.com/martini-contrib/render"
 	"github.com/beatrichartz/martini-sockets"
 	"sync"
-	"log"
 )
 
 // Chat top level
@@ -132,12 +131,8 @@ func main() {
 				// The socket connection is already long gone.
 				// Use the error for statistics etc
 			case msg := <-client.in:
-				log.Printf("Incoming: %v from %v", msg, client.Name)
-				
 				r.messageOtherClients(client, msg)
 			case <-client.done:
-				log.Printf("Removing client: %v", client.Name)
-				
 				r.removeClient(client)
 				return 200, "OK"
 			}
