@@ -105,7 +105,7 @@ Since it augments the level of websocket handling, it may prove useful if you kn
 
 4. Three goroutines are started: One is waiting on the websocket for messages, another is waiting for messages from the next handler and occasionally pinging the client. The third is waiting for disconnection coming from both sides. All these goroutines are closed with the websocket, which is also why you should not try to send messages to a client after an error occurred.
 
-5. On the event of a disconnection sent either by the next handler or the websocket or when an error occurs, the connection is closed with an appropriate or a given closing message.
+5. On the event of a disconnection sent either by the next handler or via the websocket or when an error occurs, the connection is closed with an appropriate or a given closing message.
 
 
 ## ``gorilla`` vs ``go.net`` websockets
