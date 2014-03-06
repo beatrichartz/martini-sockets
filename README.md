@@ -47,7 +47,7 @@ m.Get("/", sockets.JSON(Message{}), func(params martini.Params, receiver <-chan 
 })
 ```
 
-For a simple string messaging connection, use ``sockets.Message()``
+For a simple string messaging connection with string channels, use ``sockets.Message()``
 
 ## Options
 You can configure the options for sockets by passing in ``sockets.Options`` as the second argument to ``sockets.JSON`` or as the first argument to ``sockets.Message``. Use it to configure the following options (defaults are used here):
@@ -93,6 +93,20 @@ You can configure the options for sockets by passing in ``sockets.Options`` as t
 	RecvChannelBuffer 10 // int
 }
 ```
+
+## Rundown
+Since it augments the level of websocket handling, it may prove useful if you know how this package does the channel mapping. Here's the rundown for a connection lifetime:
+
+1. Request Method (must be GET) and origin (can not be cross-origin) are tested. If any of these conditions fail, a HTTP status is returned accordingly and the next handler is ignored.
+
+2. The request is upgraded to a websocket connection. If this faily, ``http.StatusBadRequest`` is returned and the next handler is ignored.
+
+3. The connection and its channels are created according to given options and mapped for dependency injection in ``martini``.
+
+4. Three goroutines are started: One is waiting on the websocket for messages, another is waiting for messages from the next handler and occasionally pinging the client. The third is waiting for disconnection coming from both sides. All these goroutines are closed with the websocket, which is also why you should not try to send messages to a client after an error occurred.
+
+5. On the event of a disconnection sent either by the next handler or the websocket or when an error occurs, the connection is closed with an appropriate or a given closing message.
+
 
 ## ``gorilla`` vs ``go.net`` websockets
 The gorilla websocket package is a brilliant implementation of RFC 6455 compliant websockets which has [these advantages over the go.net implementation.](https://github.com/gorilla/websocket#protocol-compliance)
