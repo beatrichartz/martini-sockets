@@ -42,7 +42,6 @@ m.Get("/", sockets.JSON(Message{}), func(params martini.Params, receiver <-chan 
 		case err := <-errorChannel:
 			// Uh oh, we received an error. This will happen before a close if the client did not disconnect regularly.
 			// Maybe useful if you want to store statistics
-			client.out <- &Message{"", "There has been an error with your connection: " + err.Error()}
 		}
 	}
 })
