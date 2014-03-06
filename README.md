@@ -99,7 +99,7 @@ Since it augments the level of websocket handling, it may prove useful if you kn
 
 1. Request Method (must be GET) and origin (can not be cross-origin) are tested. If any of these conditions fail, a HTTP status is returned accordingly and the next handler is ignored.
 
-2. The request is upgraded to a websocket connection. If this faily, ``http.StatusBadRequest`` is returned and the next handler is ignored.
+2. The request is upgraded to a websocket connection. If this fails, ``http.StatusBadRequest`` is returned and the next handler is ignored.
 
 3. The connection and its channels are created according to given options and mapped for dependency injection in ``martini``.
 
@@ -109,7 +109,7 @@ Since it augments the level of websocket handling, it may prove useful if you kn
 
 
 ## ``gorilla`` vs ``go.net`` websockets
-The gorilla websocket package is a brilliant implementation of RFC 6455 compliant websockets which has [these advantages over the go.net implementation.](https://github.com/gorilla/websocket#protocol-compliance)
+The gorilla websocket package is a brilliant implementation of RFC 6455 compliant websockets which has [these advantages over the go.net implementation.](https://github.com/gorilla/websocket#protocol-compliance). 
 
 ## Authors
 
