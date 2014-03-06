@@ -43,22 +43,6 @@ var ChatRoom = function() {
     c.ws.send(JSON.stringify(messageData));
   };
   
-  c.handleAway = function() {
-    window.addEventListener('blur', function(e) {
-      c.send({
-        typ: "status",
-        text: c.client.Name + ' is currently away from this chat'
-      });
-    });
-    
-    window.addEventListener('focus', function(e) {
-      c.send({
-        typ: "status",
-        text: c.client.Name + ' came back'
-      });
-    });
-  };
-  
   c.handleSend = function() {
     c.sendForm.addEventListener("submit", function(e) {
       e.preventDefault();

@@ -58,6 +58,11 @@ func (c *Chat) getRoom(name string) *Room {
 func (r *Room) appendClient(client *Client) {
 	r.Lock()
 	r.clients = append(r.clients, client)
+	for _, c := range r.clients {
+		if c != client {
+			c.out <- &Message{"status", client.Name, "Joined this chat"}
+		}
+	}
 	r.Unlock()
 }
 
