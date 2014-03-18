@@ -111,6 +111,11 @@ Since it augments the level of websocket handling, it may prove useful if you kn
 ## ``gorilla`` vs ``go.net`` websockets
 The gorilla websocket package is a brilliant implementation of RFC 6455 compliant websockets which has [these advantages over the go.net implementation.](https://github.com/gorilla/websocket#protocol-compliance). 
 
+## FAQ
+- Q: I am getting this error when compiling: `context.Set undefined (type martini.Context has no field or method Set)`
+  
+	A: This package depends on a recently updated version of the [`inject` package](https://github.com/codegangsta/inject) - update this package and the error should vanish.
+
 ## Authors
 
 * [Beat Richartz](https://github.com/beatrichartz)
