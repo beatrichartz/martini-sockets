@@ -91,6 +91,11 @@ You can configure the options for sockets by passing in ``sockets.Options`` as t
 	// The receiving channel buffer
 	// How many messages can be asynchronously held before the channel blocks
 	RecvChannelBuffer 10 // int
+
+	// The allowed origin
+	// Must be compileable as regexp. {{host}} will be replaced with the current
+	// request host if given. 
+	AllowedOrigin "https?://{{host}}$" // string
 }
 ```
 
