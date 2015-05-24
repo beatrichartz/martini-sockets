@@ -21,6 +21,7 @@ const (
 	recvStringsPath string = "/strings/receiver"
 	sendStringsPath string = "/strings/sender"
 	pingStringsPath string = "/strings/ping"
+	crossOriginPath string = "/cross/origin"
 )
 
 type Message struct {
@@ -305,30 +306,59 @@ func TestJSONSend(t *testing.T) {
 func TestOptionsDefaultHandling(t *testing.T) {
 	o := newOptions([]*Options{
 		&Options{
-			LogLevel: LogLevelDebug,
-			WriteWait: 15 * time.Second,
+			LogLevel:   LogLevelDebug,
+			WriteWait:  15 * time.Second,
 			PingPeriod: 10 * time.Second,
 		},
 	})
 	expectSame(t, o.LogLevel, LogLevelDebug)
-	expectSame(t, o.PingPeriod, 10 * time.Second)
-	expectSame(t, o.WriteWait, 15 * time.Second)
+	expectSame(t, o.PingPeriod, 10*time.Second)
+	expectSame(t, o.WriteWait, 15*time.Second)
 	expectSame(t, o.MaxMessageSize, defaultMaxMessageSize)
 	expectSame(t, o.SendChannelBuffer, defaultSendChannelBuffer)
 	expectSame(t, o.RecvChannelBuffer, defaultRecvChannelBuffer)
 }
 
-func TestCrossOrigin(t *testing.T) {
-	header := make(http.Header)
-	header.Add("Origin", "http://somewhere.com")
-	_, resp, err := websocket.DefaultDialer.Dial(endpoint+sendPath, header)
-	if err == nil {
-		t.Fatalf("Connecting to the socket succeeded with a cross origin request")
+func TestAllowedCrossOrigin(t *testing.T) {
+	m := martini.Classic()
+
+	recorder := httptest.NewRecorder()
+	req, err := http.NewRequest("GET", "/test", strings.NewReader(""))
+	req.Header.Add("Origin", "http://allowed.com")
+
+	if err != nil {
+		t.Error(err)
 	}
-	expectStatusCode(t, http.StatusForbidden, resp.StatusCode)
+
+	m.Any("/test", Messages(&Options{AllowedOrigin: "https?://allowed\\.com$"}), func(context martini.Context, receiver <-chan string, done <-chan bool) int {
+		return http.StatusOK
+	})
+
+	m.ServeHTTP(recorder, req)
+	// Fails at handshake stage, so we expect 400 Bad Request
+	expectStatusCode(t, http.StatusBadRequest, recorder.Code)
 }
 
-func TestUnallowedMethods(t *testing.T) {
+func TestDisallowedCrossOrigin(t *testing.T) {
+	m := martini.Classic()
+
+	recorder := httptest.NewRecorder()
+	req, err := http.NewRequest("GET", "/test", strings.NewReader(""))
+	req.Header.Add("Origin", "http://somewhere.com")
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	m.Any("/test", Messages(), func() int {
+		return http.StatusOK
+	})
+
+	m.ServeHTTP(recorder, req)
+	expectStatusCode(t, http.StatusForbidden, recorder.Code)
+}
+
+func TestDisallowedMethods(t *testing.T) {
 	m := martini.Classic()
 
 	recorder := httptest.NewRecorder()

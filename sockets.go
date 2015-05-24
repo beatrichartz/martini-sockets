@@ -27,13 +27,18 @@ const (
 	LogLevelDebug   = 3
 
 	// Sensible defaults for the socket
-	defaultLogLevel          = LogLevelInfo
-	defaultWriteWait         = 60 * time.Second
-	defaultPongWait          = 60 * time.Second
-	defaultPingPeriod        = (defaultPongWait * 8 / 10)
-	defaultMaxMessageSize int64    = 65536
-	defaultSendChannelBuffer = 10
-	defaultRecvChannelBuffer = 10
+	defaultLogLevel                = LogLevelInfo
+	defaultWriteWait               = 60 * time.Second
+	defaultPongWait                = 60 * time.Second
+	defaultPingPeriod              = (defaultPongWait * 8 / 10)
+	defaultMaxMessageSize    int64 = 65536
+	defaultSendChannelBuffer       = 10
+	defaultRecvChannelBuffer       = 10
+	defaultAllowedOrigin           = "https?://{{host}}$"
+)
+
+var (
+	replacementRegexp = regexp.MustCompile("{{\\w+}}")
 )
 
 type Options struct {
@@ -42,7 +47,7 @@ type Options struct {
 
 	// The LogLevel for socket logging, goes from 0 (Error) to 3 (Debug)
 	LogLevel int
-	
+
 	// Set to true if you want to skip logging
 	SkipLogging bool
 
@@ -64,6 +69,9 @@ type Options struct {
 
 	// The receiving channel buffer
 	RecvChannelBuffer int
+
+	// Allowed origins for websocket connections
+	AllowedOrigin string
 }
 
 type Connection struct {
@@ -640,6 +648,7 @@ func newOptions(options []*Options) *Options {
 		defaultMaxMessageSize,
 		defaultSendChannelBuffer,
 		defaultRecvChannelBuffer,
+		defaultAllowedOrigin,
 	}
 
 	// when all defaults, return it
@@ -649,7 +658,7 @@ func newOptions(options []*Options) *Options {
 
 	// map the given values to the options
 	optionsValue := reflect.ValueOf(options[0])
-	oValue    := reflect.ValueOf(&o)
+	oValue := reflect.ValueOf(&o)
 	numFields := optionsValue.Elem().NumField()
 
 	for i := 0; i < numFields; i++ {
@@ -672,7 +681,9 @@ func upgradeRequest(resp http.ResponseWriter, req *http.Request, o *Options) (*w
 		o.log("Method %s is not allowed", LogLevelWarning, req.RemoteAddr, req.Method)
 		return nil, http.StatusMethodNotAllowed, errors.New("Method not allowed")
 	}
-	if r, err := regexp.MatchString("https?://"+req.Host+"$", req.Header.Get("Origin")); !r || err != nil {
+
+	allowedOrigin := replacementRegexp.ReplaceAllString(o.AllowedOrigin, req.Host)
+	if r, err := regexp.MatchString(allowedOrigin, req.Header.Get("Origin")); !r || err != nil {
 		o.log("Origin %s is not allowed", LogLevelWarning, req.RemoteAddr, req.Host)
 		return nil, http.StatusForbidden, errors.New("Origin not allowed")
 	}
