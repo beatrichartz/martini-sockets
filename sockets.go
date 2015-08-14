@@ -20,11 +20,12 @@ import (
 )
 
 const (
-	// Log levels 0-4. Use to set the log level you wish to go for
-	LogLevelError   = 0
-	LogLevelWarning = 1
-	LogLevelInfo    = 2
-	LogLevelDebug   = 3
+	// Log levels 1-5. Use to set the log level you wish to go for
+	_ = iota
+	LogLevelError
+	LogLevelWarning
+	LogLevelInfo
+	LogLevelDebug
 
 	// Sensible defaults for the socket
 	defaultLogLevel                = LogLevelInfo
