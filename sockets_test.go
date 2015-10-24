@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -202,10 +201,7 @@ func connectSocket(t *testing.T, path string) (*websocket.Conn, *http.Response) 
 }
 
 func TestStringReceive(t *testing.T) {
-	once.Do(func() {
-		runtime.GOMAXPROCS(runtime.NumCPU() * 2)
-		startServer()
-	})
+	once.Do(startServer)
 	expectStringsToBeEmpty(t, recvStrings)
 
 	ws, resp := connectSocket(t, recvStringsPath)
@@ -242,11 +238,11 @@ func TestStringSend(t *testing.T) {
 		_, msgArray, err := ws.ReadMessage()
 		msg := string(msgArray)
 		sendStrings = append(sendStrings, msg)
-		if err != nil && err != io.EOF {
-			t.Errorf("Receiving from the socket failed with %v", err)
-		}
 		if sendStringsCount == 3 {
 			return
+		}
+		if err != nil && err != io.EOF {
+			t.Errorf("Receiving from the socket failed with %v", err)
 		}
 		sendStringsCount++
 	}
@@ -294,11 +290,11 @@ func TestJSONSend(t *testing.T) {
 		msg := &Message{}
 		err := ws.ReadJSON(msg)
 		sendMessages = append(sendMessages, msg)
-		if err != nil && err != io.EOF {
-			t.Errorf("Receiving from the socket failed with %v", err)
-		}
 		if sendCount == 3 {
 			return
+		}
+		if err != nil && err != io.EOF {
+			t.Errorf("Receiving from the socket failed with %v", err)
 		}
 		sendCount++
 	}
