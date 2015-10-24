@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -201,7 +202,10 @@ func connectSocket(t *testing.T, path string) (*websocket.Conn, *http.Response) 
 }
 
 func TestStringReceive(t *testing.T) {
-	once.Do(startServer)
+	once.Do(func() {
+		runtime.GOMAXPROCS(runtime.NumCPU() * 2)
+		startServer()
+	})
 	expectStringsToBeEmpty(t, recvStrings)
 
 	ws, resp := connectSocket(t, recvStringsPath)
