@@ -24,7 +24,7 @@ This package essentially provides a binding of websockets to channels, which you
 
 ```go
 m.Get("/", sockets.JSON(Message{}), func(params martini.Params, receiver <-chan *Message, sender chan<- *Message, done <-chan bool, disconnect chan<- int, errorChannel <-chan error) {
-	ticker = time.After(30 * time.Minute)
+	ticker := time.After(30 * time.Minute)
 	for {
 		select {
 		case msg := <-receiver:
@@ -36,7 +36,7 @@ m.Get("/", sockets.JSON(Message{}), func(params martini.Params, receiver <-chan 
 			// To demonstrate use of the disconnect channel
 			// You can use close codes according to RFC 6455
 			disconnect <- websocket.CloseNormalClosure
-		case <-client.done:
+		case <- done:
 			// the client disconnected, so you should return / break if the done channel gets sent a message
 			return
 		case err := <-errorChannel:
