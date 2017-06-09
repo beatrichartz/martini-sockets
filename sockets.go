@@ -658,7 +658,7 @@ func (c *BinaryConnection) send() {
 			}
 			// Write the message as a byte array to the socket
 			c.log("Writing %s to socket", LogLevelDebug, string(message))
-			if err := c.write(websocket.TextMessage, message); err != nil {
+			if err := c.write(websocket.BinaryMessage, message); err != nil {
 				c.log("Error writing to socket: %s", LogLevelError, err)
 				c.disconnect <- err
 				return
