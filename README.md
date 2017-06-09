@@ -16,6 +16,10 @@ Package `sockets` makes it fun to use websockets with Martini. Its aim is to pro
 
 `sockets.Messages` is a simple middleware that organizes websockets messages into string channels.
 
+#### Binary Messages
+
+`sockets.BinaryMessages` is a simple middleware that organizes websockets messages into []byte channels.
+
 ## Usage
 
 Have a look into the [example directory](https://github.com/beatrichartz/martini-sockets/tree/master/example) to get a feeling for how to use the sockets package.
