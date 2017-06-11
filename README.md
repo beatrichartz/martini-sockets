@@ -16,9 +16,9 @@ Package `sockets` makes it fun to use websockets with Martini. Its aim is to pro
 
 `sockets.Messages` is a simple middleware that organizes websockets messages into string channels.
 
-#### Binary Messages
+#### ByteSlice Messages
 
-`sockets.BinaryMessages` is a simple middleware that organizes websockets messages into []byte channels. The lower-level Gorilla Websocket supports sending raw bytes, and the high-level Martini middleware should also support it. The binary message channel is quite useful, where you can directly send your data using customized serialization methods like Protobuf. Message size is crucial in some use cases.
+`sockets.ByteSliceMessages` is a simple middleware that organizes websockets messages into []byte channels.
 
 ## Usage
 

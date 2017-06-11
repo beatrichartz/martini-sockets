@@ -157,31 +157,31 @@ type JSONConnection struct {
 	Receiver reflect.Value
 }
 
-// Binary Connection connects a websocket message connection to a []byte
+// Message Connection connects a websocket message connection to a []byte
 // channel.
-type BinaryConnection struct {
+type ByteSliceConnection struct {
 	*Connection
 
-	// Sender is the []byte channel used for sending out binary data to the client.
+	// Sender is the []byte channel used for sending out bytes data to the client.
 	// This channel gets mapped for the next handler to use and is asynchronous
 	// unless the SendChannelBuffer is set to 0.
 	Sender chan []byte
 
-	// Receiver is the []byte channel used for receiving binary data from the client.
+	// Receiver is the []byte channel used for receiving bytes data from the client.
 	// This channel gets mapped for the next handler to use and is asynchronous
 	// unless the RecvChannelBuffer is set to 0.
 	Receiver chan []byte
 }
 
-// Messages returns a websocket handling middleware. It can only be used
+// ByteSliceMessages returns a websocket handling middleware. It can only be used
 // in handlers for HTTP GET.
 // IMPORTANT: The last handler in your handler chain must block in order for the
 // connection to be kept alive.
 // It maps four channels for you to use in the follow-up Handler(s):
-// - A receiving string channel (<-chan string) on which you will
-//   receive all incoming strings from the client
-// - A sending string channel (chan<- string) on which you will be
-//   able to send strings to the client.
+// - A receiving []byte channel (<-chan []byte) on which you will
+//   receive all incoming bytes data from the client
+// - A sending []byte channel (chan<- []byte) on which you will be
+//   able to send bytes data to the client.
 // - A receiving error channel (<-chan error) on which you will receive
 //   errors occurring while sending & receiving
 // - A receiving disconnect channel  (<-chan bool) on which you will receive
@@ -196,7 +196,7 @@ type BinaryConnection struct {
 // - Starting and terminating the necessary goroutines
 // An optional sockets.Options object can be passed to Messages to overwrite
 // default options mentioned in the documentation of the Options object.
-func BinaryMessages(options ...*Options) martini.Handler {
+func ByteSliceMessages(options ...*Options) martini.Handler {
 	return makeHandler([]byte{}, newOptions(options))
 }
 
@@ -611,9 +611,9 @@ func (c *JSONConnection) mapChannels(context martini.Context) {
 	context.Set(reflect.ChanOf(reflect.RecvDir, c.Receiver.Type().Elem()), c.Receiver)
 }
 
-// Close the binary connection. Closes the send goroutine and all channels used
+// Close the ByteSlice connection. Closes the send goroutine and all channels used
 // Except for the send channel, since it should be closed by the handler sending on it.
-func (c *BinaryConnection) Close(closeCode int) error {
+func (c *ByteSliceConnection) Close(closeCode int) error {
 	// Call close on the base connection
 	c.log("Closing websocket connection", LogLevelDebug)
 	err := c.Connection.Close(closeCode)
@@ -629,16 +629,16 @@ func (c *BinaryConnection) Close(closeCode int) error {
 	return nil
 }
 
-// Write the binary to the websocket, also keeping the connection alive
-func (c *BinaryConnection) write(mt int, payload []byte) error {
+// Write the bytes to the websocket, also keeping the connection alive
+func (c *ByteSliceConnection) write(mt int, payload []byte) error {
 	c.keepAlive()
 	return c.ws.WriteMessage(mt, payload)
 }
 
-// Send handler for the binary connection. Starts a goroutine
+// Send handler for the ByteSlice connection. Starts a goroutine
 // Listening on the sender channel and writing received strings
 // to the websocket.
-func (c *BinaryConnection) send() {
+func (c *ByteSliceConnection) send() {
 	// Start the ticker and defer stopping it and decrementing the
 	// wait group counter.
 	c.startTicker()
@@ -682,7 +682,7 @@ func (c *BinaryConnection) send() {
 	}
 }
 
-func (c *BinaryConnection) recv() {
+func (c *ByteSliceConnection) recv() {
 	// Defer decrementing the wait group counter and closing the connection
 	defer func() {
 		c.log("Goroutine receiving from websocket has been closed", LogLevelDebug)
@@ -705,7 +705,7 @@ func (c *BinaryConnection) recv() {
 
 // Map the Receiver to a chan<- []byte for the next Handler(s)
 // Map the Receiver to a <-chan []byte  for the next Handler(s)
-func (c *BinaryConnection) mapChannels(context martini.Context) {
+func (c *ByteSliceConnection) mapChannels(context martini.Context) {
 	context.Set(reflect.ChanOf(reflect.SendDir, reflect.TypeOf(c.Sender).Elem()), reflect.ValueOf(c.Sender))
 	context.Set(reflect.ChanOf(reflect.RecvDir, reflect.TypeOf(c.Receiver).Elem()), reflect.ValueOf(c.Receiver))
 }
@@ -748,8 +748,6 @@ func waitForDisconnect(c Binding) {
 func newBinding(iFace interface{}, ws *websocket.Conn, o *Options) Binding {
 	typ := reflect.TypeOf(iFace)
 
-	//fmt.Sprintln(typ.Kind().String())
-
 	if typ.Kind() == reflect.String {
 		return &MessageConnection{
 			newConnection(ws, o),
@@ -759,7 +757,7 @@ func newBinding(iFace interface{}, ws *websocket.Conn, o *Options) Binding {
 	}
 
 	if typ.Kind() == reflect.Slice {
-		return &BinaryConnection{
+		return &ByteSliceConnection{
 			newConnection(ws, o),
 			make(chan []byte, o.SendChannelBuffer),
 			make(chan []byte, o.RecvChannelBuffer),

@@ -14,17 +14,17 @@ import (
 )
 
 const (
-	host            string = "http://localhost:3000"
-	endpoint        string = "ws://localhost:3000"
-	recvPath        string = "/receiver"
-	sendPath        string = "/sender"
-	pingPath        string = "/ping"
-	recvStringsPath string = "/strings/receiver"
-	recvBinaryPath  string = "/binary/receiver"
-	sendStringsPath string = "/strings/sender"
-	sendBinarysPath string = "/binary/sender"
-	pingStringsPath string = "/strings/ping"
-	crossOriginPath string = "/cross/origin"
+	host              string = "http://localhost:3000"
+	endpoint          string = "ws://localhost:3000"
+	recvPath          string = "/receiver"
+	sendPath          string = "/sender"
+	pingPath          string = "/ping"
+	recvStringsPath   string = "/strings/receiver"
+	recvByteSlicePath string = "/byteslice/receiver"
+	sendStringsPath   string = "/strings/sender"
+	sendByteSlicePath string = "/byteslice/sender"
+	pingStringsPath   string = "/strings/ping"
+	crossOriginPath   string = "/cross/origin"
 )
 
 type Message struct {
@@ -32,25 +32,25 @@ type Message struct {
 }
 
 var (
-	once               sync.Once
-	recvMessages       []*Message
-	recvBinaryMessages []byte
-	recvCount          int
-	recvDone           bool
-	sendMessages       []*Message
-	sendCount          int
-	sendDone           bool
-	recvStrings        []string
-	recvBinary         [][]byte
-	recvStringsCount   int
-	recvBinaryCount    int
-	recvStringsDone    bool
-	recvBinrayDone     bool
-	sendStrings        []string
-	sendBytes          [][]byte
-	sendStringsCount   int
-	sendStringsDone    bool
-	sendBinaryDone     bool
+	once                  sync.Once
+	recvMessages          []*Message
+	recvByteSliceMessages []byte
+	recvCount             int
+	recvDone              bool
+	sendMessages          []*Message
+	sendCount             int
+	sendDone              bool
+	recvStrings           []string
+	recvByteSlices        [][]byte
+	recvStringsCount      int
+	recvByteSliceCount    int
+	recvStringsDone       bool
+	recvByteSlicesDone    bool
+	sendStrings           []string
+	sendByteSlices        [][]byte
+	sendStringsCount      int
+	sendStringsDone       bool
+	sendByteSlicesDone    bool
 )
 
 // Test Helpers
@@ -66,9 +66,9 @@ func expectStringsToBeEmpty(t *testing.T, strings []string) {
 	}
 }
 
-func expectBinaryToBeEmpty(t *testing.T, data [][]byte) {
+func expectByteSlicesToBeEmpty(t *testing.T, data [][]byte) {
 	if len(data) > 0 {
-		t.Errorf("Expected byte array to be empty, but they contained %d values", len(data))
+		t.Errorf("Expected ByteSlice arrays to be empty, but they contained %d values", len(data))
 	}
 }
 
@@ -78,7 +78,7 @@ func expectMessagesToBeEmpty(t *testing.T, messages []*Message) {
 	}
 }
 
-func expectBinaryMessagesToBeEmpty(t *testing.T, messages []byte) {
+func expectByteSliceMessagesToBeEmpty(t *testing.T, messages []byte) {
 	if len(messages) > 0 {
 		t.Errorf("Expected messages array to be empty, but they contained %d values", len(messages))
 	}
@@ -96,13 +96,13 @@ func expectStringsToHaveArrived(t *testing.T, count int, strings []string) {
 	}
 }
 
-func expectBinariesToHaveArrived(t *testing.T, count int, binaries [][]byte) {
-	if len(binaries) < count {
-		t.Errorf("Expected strings array to contain 3 values, but contained %d", len(binaries))
+func expectByteSlicesToHaveArrived(t *testing.T, count int, byteSlices [][]byte) {
+	if len(byteSlices) < count {
+		t.Errorf("Expected ByteSlice array to contain 3 values, but contained %d", len(byteSlices))
 	} else {
-		for i, s := range binaries {
+		for i, s := range byteSlices {
 			if string(s) != "Hello World" {
-				t.Errorf("Expected string %d to be \"Hello World\", but was \"%v\"", i+1, string(s))
+				t.Errorf("Expected ByteSlice %d to be \"Hello World\", but was \"%v\"", i+1, string(s))
 			}
 		}
 	}
@@ -196,13 +196,13 @@ func startServer() {
 		return http.StatusOK
 	})
 
-	m.Get(recvBinaryPath, BinaryMessages(), func(context martini.Context, receiver <-chan []byte, done <-chan bool) int {
+	m.Get(recvByteSlicePath, ByteSliceMessages(), func(context martini.Context, receiver <-chan []byte, done <-chan bool) int {
 		for {
 			select {
 			case msg := <-receiver:
-				recvBinary = append(recvBinary, msg)
+				recvByteSlices = append(recvByteSlices, msg)
 			case <-done:
-				recvBinrayDone = true
+				recvByteSlicesDone = true
 				return http.StatusOK
 			}
 		}
@@ -232,7 +232,7 @@ func startServer() {
 		return http.StatusOK
 	})
 
-	m.Get(sendBinarysPath, BinaryMessages(), func(context martini.Context, sender chan<- []byte, done <-chan bool, disconnect chan<- int) int {
+	m.Get(sendByteSlicePath, ByteSliceMessages(), func(context martini.Context, sender chan<- []byte, done <-chan bool, disconnect chan<- int) int {
 		ticker := time.NewTicker(1 * time.Millisecond)
 		bomb := time.After(4 * time.Millisecond)
 
@@ -242,7 +242,7 @@ func startServer() {
 				sender <- []byte("Hello World")
 			case <-done:
 				ticker.Stop()
-				sendBinaryDone = true
+				sendByteSlicesDone = true
 				return http.StatusOK
 			case <-bomb:
 				disconnect <- websocket.CloseGoingAway
@@ -320,16 +320,16 @@ func TestStringSend(t *testing.T) {
 	expectIsDone(t, sendStringsDone)
 }
 
-func TestBinarySend(t *testing.T) {
+func TestByteSliceSend(t *testing.T) {
 	once.Do(startServer)
-	expectBinaryToBeEmpty(t, sendBytes)
+	expectByteSlicesToBeEmpty(t, sendByteSlices)
 
-	ws, resp := connectSocket(t, sendBinarysPath)
+	ws, resp := connectSocket(t, sendByteSlicePath)
 	defer ws.Close()
 
 	for {
 		_, msgArray, err := ws.ReadMessage()
-		sendBytes = append(sendBytes, msgArray)
+		sendByteSlices = append(sendByteSlices, msgArray)
 		if sendStringsCount == 3 {
 			return
 		}
@@ -338,9 +338,9 @@ func TestBinarySend(t *testing.T) {
 		}
 		sendStringsCount++
 	}
-	expectBinariesToHaveArrived(t, 3, sendBytes)
+	expectByteSlicesToHaveArrived(t, 3, sendByteSlices)
 	expectStatusCode(t, http.StatusSwitchingProtocols, resp.StatusCode)
-	expectIsDone(t, sendBinaryDone)
+	expectIsDone(t, sendByteSlicesDone)
 }
 
 func TestJSONReceive(t *testing.T) {
@@ -371,11 +371,11 @@ func TestJSONReceive(t *testing.T) {
 	expectIsDone(t, recvDone)
 }
 
-func TestBinaryReceive(t *testing.T) {
+func TestByteSliceReceive(t *testing.T) {
 	once.Do(startServer)
-	expectBinaryToBeEmpty(t, recvBinary)
+	expectByteSlicesToBeEmpty(t, recvByteSlices)
 
-	ws, resp := connectSocket(t, recvBinaryPath)
+	ws, resp := connectSocket(t, recvByteSlicePath)
 
 	ticker := time.NewTicker(time.Millisecond)
 
@@ -386,16 +386,16 @@ func TestBinaryReceive(t *testing.T) {
 		if err != nil {
 			t.Errorf("Writing to the socket failed with %s", err.Error())
 		}
-		recvBinaryCount++
-		if recvBinaryCount == 4 {
+		recvByteSliceCount++
+		if recvByteSliceCount == 4 {
 			ws.Close()
 			return
 		}
 	}
 
-	expectBinariesToHaveArrived(t, 3, recvBinary)
+	expectByteSlicesToHaveArrived(t, 3, recvByteSlices)
 	expectStatusCode(t, http.StatusSwitchingProtocols, resp.StatusCode)
-	expectIsDone(t, recvBinrayDone)
+	expectIsDone(t, recvByteSlicesDone)
 }
 
 func TestJSONSend(t *testing.T) {
