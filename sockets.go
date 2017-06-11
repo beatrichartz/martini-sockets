@@ -157,6 +157,49 @@ type JSONConnection struct {
 	Receiver reflect.Value
 }
 
+// Message Connection connects a websocket message connection to a []byte
+// channel.
+type ByteSliceConnection struct {
+	*Connection
+
+	// Sender is the []byte channel used for sending out bytes data to the client.
+	// This channel gets mapped for the next handler to use and is asynchronous
+	// unless the SendChannelBuffer is set to 0.
+	Sender chan []byte
+
+	// Receiver is the []byte channel used for receiving bytes data from the client.
+	// This channel gets mapped for the next handler to use and is asynchronous
+	// unless the RecvChannelBuffer is set to 0.
+	Receiver chan []byte
+}
+
+// ByteSliceMessages returns a websocket handling middleware. It can only be used
+// in handlers for HTTP GET.
+// IMPORTANT: The last handler in your handler chain must block in order for the
+// connection to be kept alive.
+// It maps four channels for you to use in the follow-up Handler(s):
+// - A receiving []byte channel (<-chan []byte) on which you will
+//   receive all incoming bytes data from the client
+// - A sending []byte channel (chan<- []byte) on which you will be
+//   able to send bytes data to the client.
+// - A receiving error channel (<-chan error) on which you will receive
+//   errors occurring while sending & receiving
+// - A receiving disconnect channel  (<-chan bool) on which you will receive
+//   a message only if the connection is about to be closed following an
+//   error or a client disconnect.
+// - A sending done channel  (chan<- bool) on which you can send as soon as you wish
+//   to disconnect the connection.
+// The middleware handles the following for you:
+// - Checking the request for cross origin access
+// - Doing the websocket handshake
+// - Setting sensible options for the Gorilla websocket connection
+// - Starting and terminating the necessary goroutines
+// An optional sockets.Options object can be passed to Messages to overwrite
+// default options mentioned in the documentation of the Options object.
+func ByteSliceMessages(options ...*Options) martini.Handler {
+	return makeHandler([]byte{}, newOptions(options))
+}
+
 // Messages returns a websocket handling middleware. It can only be used
 // in handlers for HTTP GET.
 // IMPORTANT: The last handler in your handler chain must block in order for the
@@ -568,6 +611,105 @@ func (c *JSONConnection) mapChannels(context martini.Context) {
 	context.Set(reflect.ChanOf(reflect.RecvDir, c.Receiver.Type().Elem()), c.Receiver)
 }
 
+// Close the ByteSlice connection. Closes the send goroutine and all channels used
+// Except for the send channel, since it should be closed by the handler sending on it.
+func (c *ByteSliceConnection) Close(closeCode int) error {
+	// Call close on the base connection
+	c.log("Closing websocket connection", LogLevelDebug)
+	err := c.Connection.Close(closeCode)
+
+	if err != nil {
+		return err
+	}
+
+	// Do not close the receiver here since it would send nil
+	// Just let go
+	c.log("Connection closed", LogLevelInfo)
+
+	return nil
+}
+
+// Write the bytes to the websocket, also keeping the connection alive
+func (c *ByteSliceConnection) write(mt int, payload []byte) error {
+	c.keepAlive()
+	return c.ws.WriteMessage(mt, payload)
+}
+
+// Send handler for the ByteSlice connection. Starts a goroutine
+// Listening on the sender channel and writing received strings
+// to the websocket.
+func (c *ByteSliceConnection) send() {
+	// Start the ticker and defer stopping it and decrementing the
+	// wait group counter.
+	c.startTicker()
+	defer func() {
+		c.stopTicker()
+		c.log("Goroutine sending to websocket has been closed", LogLevelDebug)
+	}()
+
+	for {
+		select {
+		// Receiving a message from the next handler
+		case message, ok := <-c.Sender:
+			if !ok {
+				c.log("Sender channel has been closed", LogLevelError)
+				c.disconnect <- errors.New("Sender channel has been closed")
+				return
+			}
+			// Write the message as a byte array to the socket
+			c.log("Writing %s to socket", LogLevelDebug, string(message))
+			if err := c.write(websocket.BinaryMessage, message); err != nil {
+				c.log("Error writing to socket: %s", LogLevelError, err)
+				c.disconnect <- err
+				return
+			}
+
+			c.keepAlive()
+		// Ping the client
+		case <-c.ticker.C:
+			err := c.ping()
+			c.log("%s", LogLevelDebug, err)
+			if err := c.ping(); err != nil {
+				c.log("Error pinging socket: %s", LogLevelError, err)
+				c.disconnect <- err
+				return
+			}
+
+		// Receiving disconnectSend from the closing Connection
+		case <-c.disconnectSend:
+			return
+		}
+	}
+}
+
+func (c *ByteSliceConnection) recv() {
+	// Defer decrementing the wait group counter and closing the connection
+	defer func() {
+		c.log("Goroutine receiving from websocket has been closed", LogLevelDebug)
+	}()
+
+	for {
+		// Read a message from the client
+		_, message, err := c.ws.ReadMessage()
+		if err != nil {
+			c.log("Error reading from socket: %s", LogLevelError, err)
+			c.disconnect <- err
+			return
+		}
+		// Send the message as a string to the next handler
+		c.log("Read message from socket, %s", LogLevelDebug, string(message))
+		c.Receiver <- message
+		c.keepAlive()
+	}
+}
+
+// Map the Receiver to a chan<- []byte for the next Handler(s)
+// Map the Receiver to a <-chan []byte  for the next Handler(s)
+func (c *ByteSliceConnection) mapChannels(context martini.Context) {
+	context.Set(reflect.ChanOf(reflect.SendDir, reflect.TypeOf(c.Sender).Elem()), reflect.ValueOf(c.Sender))
+	context.Set(reflect.ChanOf(reflect.RecvDir, reflect.TypeOf(c.Receiver).Elem()), reflect.ValueOf(c.Receiver))
+}
+
 // Waits for a disconnect message and closes the connection with an appropriate close message.
 // The possible messages are:
 // TODO this should get more elaborate.
@@ -611,6 +753,14 @@ func newBinding(iFace interface{}, ws *websocket.Conn, o *Options) Binding {
 			newConnection(ws, o),
 			make(chan string, o.SendChannelBuffer),
 			make(chan string, o.RecvChannelBuffer),
+		}
+	}
+
+	if typ.Kind() == reflect.Slice {
+		return &ByteSliceConnection{
+			newConnection(ws, o),
+			make(chan []byte, o.SendChannelBuffer),
+			make(chan []byte, o.RecvChannelBuffer),
 		}
 	}
 
