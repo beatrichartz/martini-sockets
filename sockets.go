@@ -20,11 +20,12 @@ import (
 )
 
 const (
-	// Log levels 0-4. Use to set the log level you wish to go for
-	LogLevelError   = 0
-	LogLevelWarning = 1
-	LogLevelInfo    = 2
-	LogLevelDebug   = 3
+	// Log levels 1-5. Use to set the log level you wish to go for
+	_ = iota
+	LogLevelError
+	LogLevelWarning
+	LogLevelInfo
+	LogLevelDebug
 
 	// Sensible defaults for the socket
 	defaultLogLevel                = LogLevelInfo
@@ -294,7 +295,7 @@ func makeHandler(binding interface{}, o *Options) martini.Handler {
 }
 
 // Log Level to strings slice
-var LogLevelStrings = []string{"Error", "Warning", "Info", "Debug"}
+var LogLevelStrings = []string{"Unknown", "Error", "Warning", "Info", "Debug"}
 
 // The options logger is only directly used while setting up the connection
 // With the default logger, it logs in the format [socket][client remote address] log message
